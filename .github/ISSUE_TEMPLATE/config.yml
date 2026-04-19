@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: General discussion
+    url: https://github.com/thtwz/DoneGate-MCP/discussions
+    about: Use discussions for broader ideas, adoption questions, and product-direction conversations.

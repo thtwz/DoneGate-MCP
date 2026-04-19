@@ -1,5 +1,9 @@
 # DoneGate MCP
 
+[![Test](https://img.shields.io/github/actions/workflow/status/thtwz/DoneGate-MCP/test.yml?branch=main&label=test)](https://github.com/thtwz/DoneGate-MCP/actions/workflows/test.yml)
+[![License](https://img.shields.io/github/license/thtwz/DoneGate-MCP)](https://github.com/thtwz/DoneGate-MCP/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/badge/PyPI-planned-blue)](https://pypi.org/project/donegate-mcp/)
+
 DoneGate MCP is a lightweight quality gate for AI-assisted software delivery.
 
 It prevents tasks from being marked done until verification passes, docs are synced, required artifacts exist, and changed specs have been revalidated. It is designed for local-first workflows, git hooks, CI wrappers, and MCP-based agent orchestration.
@@ -45,6 +49,8 @@ A task cannot become `done` unless all of the following are true:
 - `docs/startup-guide.md`
 - `docs/end-to-end-demo.md`
 - `docs/product-notes.md`
+- `docs/release-notes-v0.1.0.md`
+- `docs/repository-metadata.md`
 - `CONTRIBUTING.md`
 - `LICENSE`
 - `docs/release-checklist.md`
@@ -135,6 +141,10 @@ SPEC_REF=docs/spec.md DELIVERY_MCP_ROOT=.delivery-mcp scripts/post-spec-change.s
 ## Current status
 
 DoneGate MCP is already a working vertical slice. It includes executable self-test gates, artifact and doc validation, lifecycle projection, spec drift detection, deviation logging, and enough docs/examples to wire into a real repository today.
+
+## Release notes
+
+The initial public release notes live in [docs/release-notes-v0.1.0.md](/Users/mac/workspace/projects/delivery-mcp/docs/release-notes-v0.1.0.md).
 
 ## Development
 
