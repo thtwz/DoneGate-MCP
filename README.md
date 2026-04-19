@@ -2,7 +2,7 @@
 
 [![Test](https://img.shields.io/github/actions/workflow/status/thtwz/DoneGate-MCP/test.yml?branch=main&label=test)](https://github.com/thtwz/DoneGate-MCP/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/thtwz/DoneGate-MCP)](https://github.com/thtwz/DoneGate-MCP/blob/main/LICENSE)
-[![PyPI](https://img.shields.io/badge/PyPI-planned-blue)](https://pypi.org/project/donegate-mcp/)
+[![Package](https://img.shields.io/badge/package-not%20published-lightgrey)](https://github.com/thtwz/DoneGate-MCP/releases)
 
 DoneGate MCP is a lightweight quality gate for AI-assisted software delivery.
 
