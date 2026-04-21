@@ -215,3 +215,20 @@ def test_pre_push_hook_blocks_when_supervision_reports_stale_docs(tmp_path) -> N
 
     assert completed.returncode != 0
     assert "stale_docs" in completed.stderr
+
+
+def test_unblock_task_clears_blocked_projection_before_transition(tmp_path) -> None:
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
+    service.init_project("demo")
+    created = service.create_task("Gate task", "docs/spec.md")
+    task_id = created["task"]["task_id"]
+    service.transition_task(task_id, "ready")
+    service.transition_task(task_id, "in_progress")
+    service.block_task(task_id, "waiting on design")
+
+    result = service.unblock_task(task_id, "in_progress")
+
+    assert result["ok"] is True
+    assert result["task"]["status"] == "in_progress"
+    assert result["task"]["blocked_reason"] is None

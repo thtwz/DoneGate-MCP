@@ -120,7 +120,48 @@ The response includes the current branch, any branch-bound active task, the gene
 
 ## 6. MCP integration
 
-Use `examples/hermes-mcp-config.yaml` as a starting point. In practice, prefer packaging DoneGate MCP into the Python environment that Hermes uses, then point `mcp_servers.donegate_mcp.command` to that interpreter.
+### Hermes native MCP
+
+Use `examples/hermes-mcp-config.yaml` as a starting point.
+If Hermes runs DoneGate MCP from the delivery-mcp checkout, the typical setup is:
+
+```yaml
+mcp_servers:
+  donegate_mcp:
+    command: "/Users/mac/workspace/projects/delivery-mcp/.venv/bin/donegate-mcp-serve"
+    args: []
+    env:
+      DONEGATE_MCP_DATA_ROOT: "/absolute/path/to/.donegate-mcp"
+    timeout: 120
+    connect_timeout: 30
+```
+
+After changing the code, update the environment Hermes uses by reinstalling the editable package in that venv:
+
+```bash
+cd /Users/mac/workspace/projects/delivery-mcp
+/Users/mac/workspace/projects/delivery-mcp/.venv/bin/pip install -e '.[mcp,test]'
+```
+
+If you use Hermes skills, load the `donegate-mcp-governor` skill before governed work so the operator flow stays aligned with DoneGate facts instead of chat narration.
+
+### Trae / plugin-style MCP clients
+
+For Trae-style plugin configs, point the plugin at the same `donegate-mcp-serve` entrypoint and data root:
+
+```json
+{
+  "mcpServers": {
+    "donegate_mcp": {
+      "command": "/Users/mac/workspace/projects/delivery-mcp/.venv/bin/donegate-mcp-serve",
+      "args": [],
+      "env": {
+        "DONEGATE_MCP_DATA_ROOT": "/absolute/path/to/.donegate-mcp"
+      }
+    }
+  }
+}
+```
 
 ## 7. Codex plugin integration
 

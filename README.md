@@ -126,7 +126,19 @@ donegate-mcp --data-root .donegate-mcp task submit TASK-0001
 donegate-mcp --data-root .donegate-mcp --json task self-test TASK-0001 --workdir .
 donegate-mcp --data-root .donegate-mcp task doc-sync TASK-0001 --result synced --ref docs/plan.md
 donegate-mcp --data-root .donegate-mcp --json task done TASK-0001
+# later, if the task must be reopened for more work:
+donegate-mcp --data-root .donegate-mcp --json task reopen TASK-0001
 ```
+
+## Typical flow
+
+1. Create a task from a spec or ticket.
+2. Start work and submit it for verification.
+3. Record verification or run the configured self-test.
+4. Record documentation sync.
+5. Close the task only when the gate passes.
+6. If completed work must resume, use `task reopen` to move it back into an active non-done state.
+7. Refresh spec hashes when requirements change and revalidate stale work.
 
 ## LLM / Agent Quickstart From Git URL
 
@@ -220,6 +232,19 @@ If the host cannot inherit that environment, MCP calls should pass `repo_root` e
 See:
 - [Startup guide](docs/startup-guide.md)
 - `.donegate-mcp/onboarding/codex.md`
+
+## Acceptance guidance from real usage
+
+When a task changes observable system behavior, do not treat any single signal as enough evidence to call it done. Real acceptance should verify the full closed loop:
+
+- the externally observable outcome,
+- the operation result at the system boundary,
+- the persisted source-of-truth state,
+- and the downstream derived state that depends on that persistence.
+
+If any of those disagree, the task is not actually done and should be captured as failed verification or a deviation.
+
+## Release notes
 
 ## Active Task Context
 

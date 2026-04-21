@@ -1,16 +1,17 @@
 # Example Hermes MCP config snippet
+# Use this in ~/.hermes/config.yaml when Hermes should talk to a local DoneGate MCP checkout.
 mcp_servers:
   donegate_mcp:
-    command: "python3"
-    args:
-      - "-c"
-      - |
-        from donegate_mcp.mcp.server import build_app
-        app = build_app('.donegate-mcp')
-        server = app.server
-        if hasattr(server, 'run'):
-            server.run()
-        else:
-            print('donegate-mcp fallback server loaded; use CLI for local dev')
+    command: "/Users/mac/workspace/projects/delivery-mcp/.venv/bin/donegate-mcp-serve"
+    args: []
+    env:
+      DONEGATE_MCP_DATA_ROOT: "/absolute/path/to/.donegate-mcp"
     timeout: 120
     connect_timeout: 30
+
+# After changing DoneGate MCP code, refresh the Hermes runtime with:
+# /Users/mac/workspace/projects/delivery-mcp/.venv/bin/pip install -e '.[mcp,test]'
+#
+# If you also use Trae or another plugin-style MCP client, point it at the same
+# donegate-mcp-serve command and DONEGATE_MCP_DATA_ROOT so Hermes and the plugin
+# observe the same governed project state.

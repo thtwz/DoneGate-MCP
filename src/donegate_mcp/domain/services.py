@@ -715,12 +715,27 @@ class DoneGateService:
     def block_task(self, task_id: str, reason: str) -> dict[str, Any]:
         return self.transition_task(task_id, TaskStatus.BLOCKED.value, reason=reason)
 
+    def reopen_task(self, task_id: str, target_status: str = TaskStatus.IN_PROGRESS.value) -> dict[str, Any]:
+        self._require_project()
+        task = self.tasks.load(task_id)
+        if task.status != TaskStatus.DONE:
+            raise ValidationError(f"{task_id} is not done")
+        target = TaskStatus(target_status)
+        if target not in {TaskStatus.READY, TaskStatus.IN_PROGRESS, TaskStatus.AWAITING_VERIFICATION}:
+            raise ValidationError("reopen target must be one of: ready, in_progress, awaiting_verification")
+        task = apply_transition(task, target)
+        self.tasks.save(task)
+        self._emit(task.task_id, "task_reopened", {"target_status": target.value, "resulting_status": task.status.value})
+        self._sync_state_files()
+        return {"ok": True, "task": task.to_dict(), "events_written": 1, "errors": []}
+
     def unblock_task(self, task_id: str, target_status: str) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
         if task.status != TaskStatus.BLOCKED:
             raise ValidationError(f"{task_id} is not blocked")
         task.blocked_reason = None
+        task = normalize_task(task)
         task = apply_transition(task, TaskStatus(target_status))
         self.tasks.save(task)
         self._emit(task.task_id, "task_unblocked", {"target_status": task.status.value})

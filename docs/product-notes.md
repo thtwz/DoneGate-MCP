@@ -19,6 +19,27 @@ This project is not a project manager, not a CI platform, and not a general work
 - MCP support as an orchestration layer, not the primary value proposition.
 - Strong tests around lifecycle and gate enforcement.
 - Spec drift and revalidation as first-class workflow concepts.
+- Acceptance must be evidence-driven, not narration-driven: one-layer success cues are never enough on their own.
+
+## Acceptance lessons from real usage
+
+DoneGate MCP should explicitly encode the following reusable lessons about acceptance:
+
+1. **A single success signal is not acceptance evidence.**
+   A UI message, a log line, a returned status, or any other one-layer success cue is not enough by itself; acceptance still has to verify that the underlying state change actually happened.
+
+2. **Acceptance must verify the full closed loop, not just one layer.**
+   For any workflow step that changes system behavior, the real gate should check all of:
+   - the externally observable outcome,
+   - the operation result at the system boundary,
+   - the persisted source-of-truth state,
+   - and the downstream derived state that depends on that persistence.
+
+3. **Synthetic/unit tests are necessary but not sufficient for closure.**
+   If a task claims to improve real behavior, acceptance should include at least one validation path against realistic operating conditions. Otherwise a fixture can accidentally encode unrealistic preconditions and let a broken workflow pass.
+
+4. **Truth alignment matters more than surface coherence.**
+   If observable behavior, boundary responses, and persisted truth disagree, the task has failed acceptance. DoneGate should encourage operators to record this explicitly as a deviation or failed verification, not as an informal note.
 
 ## Cut for v0.1
 

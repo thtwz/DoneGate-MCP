@@ -14,7 +14,7 @@ Build a first working MCP server that manages a spec-driven delivery workflow fo
 - Load/create project workspace state.
 - Manage tasks with projected workflow phases: draft, ready, in_progress, awaiting_verification, verified, documented, done, blocked.
 - Treat verification/doc-sync/blocking/completion timestamps as primary domain facts.
-- Keep `start`, `submit`, `done`, `block`, and `unblock` as the main intent commands.
+- Keep `start`, `submit`, `done`, `reopen`, `block`, and `unblock` as the main intent commands.
 - Preserve `transition --to verified|documented` only as compatibility aliases, not preferred operator workflow.
 - Record verification results.
 - Record documentation sync results.
@@ -49,6 +49,9 @@ Build a first working MCP server that manages a spec-driven delivery workflow fo
 - Dashboard shows counts and next actionable tasks.
 - Existing task JSON can be replayed and normalized from stale raw status values.
 - Tests pass locally.
+- The documentation clearly states that acceptance evidence must come from real system facts, not assistant narration or UI-only cues.
+- The demo/docs show that acceptance for behavior-changing workflows should verify externally observable outcome + boundary result + persisted source-of-truth state + downstream derived state, not just a single success cue.
+- The project guidance explicitly calls out that realistic validation conditions may be required when fixtures can hide broken workflow assumptions.
 
 ## Risks
 - MCP SDK APIs differ by installed version.

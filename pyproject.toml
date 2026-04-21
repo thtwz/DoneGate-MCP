@@ -20,6 +20,7 @@ test = ["pytest>=8.0"]
 
 [project.scripts]
 donegate-mcp = "donegate_mcp.cli.main:main"
+donegate-mcp-serve = "donegate_mcp.mcp.server:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -44,7 +44,7 @@ def _has_work_evidence(task: Task) -> bool:
 def project_status(task: Task) -> TaskStatus:
     if task.done_at or task.status == TaskStatus.DONE:
         return TaskStatus.DONE
-    if task.blocked_reason or task.status == TaskStatus.BLOCKED:
+    if task.blocked_reason:
         return TaskStatus.BLOCKED
     if task.needs_revalidation:
         return TaskStatus.IN_PROGRESS
@@ -108,15 +108,20 @@ def _ensure_paths_exist(paths: list[str], label: str) -> None:
 
 def _require_not_terminal_or_blocked(task: Task, target: TaskStatus) -> None:
     if task.status == TaskStatus.DONE:
+        if target in {TaskStatus.DRAFT, TaskStatus.READY, TaskStatus.IN_PROGRESS, TaskStatus.AWAITING_VERIFICATION, TaskStatus.VERIFIED, TaskStatus.DOCUMENTED}:
+            return
         raise TransitionError(f"{task.task_id} is done and cannot move to {target.value}")
     if task.status == TaskStatus.BLOCKED:
         raise TransitionError(f"{task.task_id} is blocked and cannot move to {target.value}")
 
 
 def require_transition(task: Task, target: TaskStatus) -> None:
+    task = normalize_task(task)
     if task.status == target:
         return
     if target == TaskStatus.BLOCKED:
+        return
+    if task.status == TaskStatus.DONE and target != TaskStatus.DONE:
         return
     if target in {TaskStatus.IN_PROGRESS, TaskStatus.AWAITING_VERIFICATION, TaskStatus.VERIFIED, TaskStatus.DOCUMENTED, TaskStatus.DONE}:
         _require_not_terminal_or_blocked(task, target)
@@ -146,6 +151,9 @@ def apply_transition(task: Task, target: TaskStatus) -> Task:
     if task.status == target:
         return normalize_task(task)
     timestamp = utc_now()
+    reopening_from_done = task.status == TaskStatus.DONE and target != TaskStatus.DONE
+    if reopening_from_done:
+        task.done_at = None
     task.status = target
     task.updated_at = timestamp
     if target in {TaskStatus.IN_PROGRESS, TaskStatus.AWAITING_VERIFICATION, TaskStatus.VERIFIED, TaskStatus.DOCUMENTED, TaskStatus.DONE} and task.started_at is None:

@@ -110,6 +110,10 @@ class DoneGateMcpApp:
             service, _ = self._resolve_call_context(repo_root=repo_root, data_root=data_root)
             return self._safe(service.block_task, task_id, reason)
 
+        @server.tool("task_reopen")
+        def task_reopen(task_id: str, target_status: str = "in_progress") -> dict[str, Any]:
+            return self._safe(self.service.reopen_task, task_id, target_status=target_status)
+
         @server.tool("task_unblock")
         def task_unblock(task_id: str, target_status: str, repo_root: str | None = None, data_root: str | None = None) -> dict[str, Any]:
             service, _ = self._resolve_call_context(repo_root=repo_root, data_root=data_root)
@@ -125,3 +129,17 @@ class DoneGateMcpApp:
 
 def build_app(data_root: str | None = None) -> DoneGateMcpApp:
     return DoneGateMcpApp(data_root=data_root)
+
+
+def main(data_root: str | None = None) -> int:
+    resolved_root = data_root or os.environ.get("DONEGATE_MCP_DATA_ROOT")
+    app = build_app(resolved_root)
+    server = app.server
+    if hasattr(server, "run"):
+        server.run()
+        return 0
+    raise SystemExit("donegate-mcp fallback server loaded; install mcp in runtime env")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

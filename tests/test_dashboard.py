@@ -5,7 +5,10 @@ from donegate_mcp.models import Task, TaskStatus
 
 
 def make_task(task_id: str, status: TaskStatus, title: str) -> Task:
-    return Task(task_id=task_id, title=title, spec_ref="docs/spec.md", status=status)
+    task = Task(task_id=task_id, title=title, spec_ref="docs/spec.md", status=status)
+    if status == TaskStatus.BLOCKED:
+        task.blocked_reason = "waiting"
+    return task
 
 
 def test_dashboard_prioritizes_blocked_then_verification_then_docs_then_ready() -> None:

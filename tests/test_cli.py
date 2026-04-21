@@ -362,3 +362,71 @@ def test_done_intent_can_close_ready_task_once_facts_are_satisfied(tmp_path) -> 
     run_cli(tmp_path, "task", "doc-sync", task_id, "--result", "synced", "--ref", str(doc))
     closed = json.loads(run_cli(tmp_path, "--json", "task", "done", task_id).stdout)
     assert closed["task"]["status"] == "done"
+
+
+def test_cli_transition_can_reopen_done_task_to_incomplete(tmp_path) -> None:
+    run_cli(tmp_path, "init", "--project-name", "demo")
+    doc = tmp_path / "plan.md"
+    doc.write_text("ok", encoding="utf-8")
+    created = run_cli(tmp_path, "--json", "task", "create", "--title", "t", "--spec-ref", str(doc))
+    task_id = json.loads(created.stdout)["task"]["task_id"]
+    run_cli(tmp_path, "task", "transition", task_id, "--to", "ready")
+    run_cli(tmp_path, "task", "verify", task_id, "--result", "passed", "--ref", str(doc))
+    run_cli(tmp_path, "task", "doc-sync", task_id, "--result", "synced", "--ref", str(doc))
+    run_cli(tmp_path, "task", "done", task_id)
+
+    reopened = run_cli(tmp_path, "--json", "task", "transition", task_id, "--to", "in_progress")
+
+    assert reopened.returncode == 0
+    payload = json.loads(reopened.stdout)
+    assert payload["task"]["status"] != "done"
+    assert payload["task"]["done_at"] is None
+
+
+def test_cli_transition_can_reopen_done_task_to_ready(tmp_path) -> None:
+    run_cli(tmp_path, "init", "--project-name", "demo")
+    doc = tmp_path / "plan.md"
+    doc.write_text("ok", encoding="utf-8")
+    created = run_cli(tmp_path, "--json", "task", "create", "--title", "t", "--spec-ref", str(doc))
+    task_id = json.loads(created.stdout)["task"]["task_id"]
+    run_cli(tmp_path, "task", "transition", task_id, "--to", "ready")
+    run_cli(tmp_path, "task", "verify", task_id, "--result", "passed", "--ref", str(doc))
+    run_cli(tmp_path, "task", "doc-sync", task_id, "--result", "synced", "--ref", str(doc))
+    run_cli(tmp_path, "task", "done", task_id)
+
+    reopened = run_cli(tmp_path, "--json", "task", "transition", task_id, "--to", "ready")
+
+    assert reopened.returncode == 0
+    payload = json.loads(reopened.stdout)
+    assert payload["task"]["status"] != "done"
+    assert payload["task"]["done_at"] is None
+
+
+def test_cli_reopen_defaults_done_task_to_in_progress_intent(tmp_path) -> None:
+    run_cli(tmp_path, "init", "--project-name", "demo")
+    doc = tmp_path / "plan.md"
+    doc.write_text("ok", encoding="utf-8")
+    created = run_cli(tmp_path, "--json", "task", "create", "--title", "t", "--spec-ref", str(doc))
+    task_id = json.loads(created.stdout)["task"]["task_id"]
+    run_cli(tmp_path, "task", "transition", task_id, "--to", "ready")
+    run_cli(tmp_path, "task", "verify", task_id, "--result", "passed", "--ref", str(doc))
+    run_cli(tmp_path, "task", "doc-sync", task_id, "--result", "synced", "--ref", str(doc))
+    run_cli(tmp_path, "task", "done", task_id)
+
+    reopened = run_cli(tmp_path, "--json", "task", "reopen", task_id)
+
+    assert reopened.returncode == 0
+    payload = json.loads(reopened.stdout)
+    assert payload["task"]["status"] != "done"
+    assert payload["task"]["done_at"] is None
+
+
+def test_cli_reopen_rejects_non_done_task(tmp_path) -> None:
+    run_cli(tmp_path, "init", "--project-name", "demo")
+    created = run_cli(tmp_path, "--json", "task", "create", "--title", "t", "--spec-ref", "docs/spec.md")
+    task_id = json.loads(created.stdout)["task"]["task_id"]
+
+    reopened = run_cli(tmp_path, "task", "reopen", task_id)
+
+    assert reopened.returncode == 2
+    assert "is not done" in reopened.stdout

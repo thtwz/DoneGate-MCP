@@ -86,6 +86,34 @@ def test_done_transition_can_close_directly_from_ready_when_gates_are_satisfied(
     assert updated.done_at is not None
 
 
+def test_done_task_can_reopen_to_in_progress() -> None:
+    task = make_task(TaskStatus.DONE)
+    task.started_at = "2026-01-01T00:00:00+00:00"
+    task.verification_status = VerificationStatus.PASSED
+    task.doc_sync_status = DocSyncStatus.SYNCED
+    task.verified_at = "2026-01-01T00:00:00+00:00"
+    task.documented_at = "2026-01-01T00:00:00+00:00"
+    task.done_at = "2026-01-02T00:00:00+00:00"
+
+    updated = apply_transition(task, TaskStatus.IN_PROGRESS)
+
+    assert updated.status == TaskStatus.DOCUMENTED
+    assert updated.done_at is None
+
+
+def test_done_task_can_reopen_to_ready() -> None:
+    task = make_task(TaskStatus.DONE)
+    task.started_at = "2026-01-01T00:00:00+00:00"
+    task.verification_status = VerificationStatus.PASSED
+    task.doc_sync_status = DocSyncStatus.SYNCED
+    task.done_at = "2026-01-02T00:00:00+00:00"
+
+    updated = apply_transition(task, TaskStatus.READY)
+
+    assert updated.status == TaskStatus.DOCUMENTED
+    assert updated.done_at is None
+
+
 def test_documented_transition_from_ready_normalizes_from_facts() -> None:
     task = make_task(TaskStatus.READY)
     task.verification_status = VerificationStatus.PASSED

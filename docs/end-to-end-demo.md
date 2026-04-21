@@ -44,6 +44,8 @@ donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp task submit $TASK_ID
 donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp --json task self-test $TASK_ID --workdir /tmp/delivery-demo
 donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp task doc-sync $TASK_ID --result synced --ref /tmp/delivery-demo/docs/plan.md
 donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp --json task done $TASK_ID
+# later, if new work invalidates the closure:
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp --json task reopen $TASK_ID
 ```
 
 ## Change the spec and detect drift
@@ -74,3 +76,25 @@ cat /tmp/delivery-demo/.donegate-mcp/plan.json
 cat /tmp/delivery-demo/.donegate-mcp/progress.json
 cat /tmp/delivery-demo/.donegate-mcp/deviations.jsonl
 ```
+
+## Acceptance check for behavior-changing workflows
+
+Use this mental model whenever a task changes observable system behavior, not just internal policy.
+A task is **not** accepted because one signal looks good or one fixture passes.
+
+Verify the full closed loop instead:
+
+1. **Externally observable outcome**
+   - Did the behavior visible outside the component actually change the way the task promised?
+2. **Boundary result**
+   - Did the operation at the relevant system boundary report success rather than a hidden failure?
+3. **Persisted source-of-truth state**
+   - Did the backing state actually update?
+4. **Downstream derived state**
+   - Did the dependent summaries, views, or projections that rely on that persistence also change?
+
+If any of those disagree, treat the task as **not done** and record that with either:
+- `task verify <task-id> --result failed ...`
+- or `deviation add <task-id> ...`
+
+This is the guardrail that prevents one-layer success signals from passing acceptance when the system truth has not actually changed.

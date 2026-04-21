@@ -92,6 +92,10 @@ def build_parser() -> argparse.ArgumentParser:
         p = task_sub.add_parser(name)
         p.add_argument("task_id")
 
+    reopen = task_sub.add_parser("reopen")
+    reopen.add_argument("task_id")
+    reopen.add_argument("--to", choices=["ready", "in_progress", "awaiting_verification"], default="in_progress")
+
     transition = task_sub.add_parser("transition", help="compatibility escape hatch; prefer start/submit/done plus verify/doc-sync facts")
     transition.add_argument("task_id")
     transition.add_argument("--to", required=True, help="target status; verified/documented remain compatibility aliases")
@@ -208,6 +212,8 @@ def _run_task_command(service: DoneGateService, args: argparse.Namespace) -> dic
         return service.run_self_test(args.task_id, workdir=args.workdir)
     if cmd == "done":
         return service.transition_task(args.task_id, "done")
+    if cmd == "reopen":
+        return service.reopen_task(args.task_id, target_status=args.to)
     if cmd == "block":
         return service.block_task(args.task_id, args.reason)
     if cmd == "unblock":
