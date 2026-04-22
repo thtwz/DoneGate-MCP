@@ -18,6 +18,80 @@ def test_done_returns_gate_violation_exit_code(tmp_path) -> None:
     assert run_cli(tmp_path, "task", "done", task_id).returncode == 3
 
 
+def test_bootstrap_initializes_repo_and_installs_hooks(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    hooks_dir = repo / ".git" / "hooks"
+    hooks_dir.mkdir(parents=True)
+
+    bootstrapped = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "donegate_mcp.cli.main",
+            "--json",
+            "bootstrap",
+            "--project-name",
+            "demo",
+            "--repo-root",
+            str(repo),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    payload = json.loads(bootstrapped.stdout)
+    assert bootstrapped.returncode == 0
+    assert payload["ok"] is True
+    assert payload["project"]["project_name"] == "demo"
+    assert payload["hooks"]["installed"] == ["pre-commit", "pre-push"]
+    assert (repo / ".donegate-mcp" / "project.json").exists()
+    assert (hooks_dir / "pre-commit").exists()
+    assert (hooks_dir / "pre-push").exists()
+
+
+def test_cli_active_task_commands_round_trip(tmp_path) -> None:
+    run_cli(tmp_path, "init", "--project-name", "demo")
+    created = run_cli(tmp_path, "--json", "task", "create", "--title", "t", "--spec-ref", "docs/spec.md")
+    task_id = json.loads(created.stdout)["task"]["task_id"]
+
+    activated = json.loads(run_cli(tmp_path, "--json", "task", "activate", task_id).stdout)
+    assert activated["active_task"]["task_id"] == task_id
+
+    current = json.loads(run_cli(tmp_path, "--json", "task", "active").stdout)
+    assert current["active_task"]["task_id"] == task_id
+
+    cleared = json.loads(run_cli(tmp_path, "--json", "task", "clear-active").stdout)
+    assert cleared["active_task"] is None
+
+
+def test_cli_supervision_reports_dirty_repo_without_active_task(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    tracked = repo / "tracked.txt"
+    tracked.write_text("v1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    run_cli(repo, "init", "--project-name", "demo")
+    tracked.write_text("v2\n", encoding="utf-8")
+
+    reported = run_cli(
+        repo,
+        "--json",
+        "supervision",
+        "--repo-root",
+        str(repo),
+    )
+    payload = json.loads(reported.stdout)
+
+    assert payload["supervision"]["status"] == "needs_task"
+    assert payload["supervision"]["changed_files"] == ["tracked.txt"]
+
+
 def test_json_dashboard_output(tmp_path) -> None:
     run_cli(tmp_path, "init", "--project-name", "demo")
     out = run_cli(tmp_path, "--json", "dashboard")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 
 from donegate_mcp.domain.services import DoneGateService
 
@@ -21,6 +22,72 @@ def test_init_and_create_task_persists_files(tmp_path) -> None:
     assert event_file.exists()
     assert plan_file.exists()
     assert progress_file.exists()
+
+
+def test_bootstrap_repository_initializes_state_and_skips_unmanaged_hooks(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    hooks = repo / ".git" / "hooks"
+    hooks.mkdir(parents=True)
+    custom_hook = hooks / "pre-commit"
+    custom_hook.write_text("#!/bin/sh\necho custom\n", encoding="utf-8")
+
+    service = DoneGateService(repo / ".donegate-mcp")
+    bootstrapped = service.bootstrap_repository("demo", repo_root=repo)
+
+    assert bootstrapped["project"]["project_name"] == "demo"
+    assert bootstrapped["hooks"]["installed"] == ["pre-push"]
+    assert bootstrapped["hooks"]["skipped"] == ["pre-commit"]
+    assert custom_hook.read_text(encoding="utf-8") == "#!/bin/sh\necho custom\n"
+    assert (hooks / "pre-push").exists()
+
+
+def test_active_task_context_round_trip(tmp_path) -> None:
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
+    service.init_project("demo")
+    created = service.create_task("Gate task", "docs/spec.md")
+    task_id = created["task"]["task_id"]
+
+    activated = service.activate_task(task_id)
+    assert activated["active_task"]["task_id"] == task_id
+
+    current = service.get_active_task()
+    assert current["active_task"]["task_id"] == task_id
+
+    cleared = service.clear_active_task()
+    assert cleared["active_task"] is None
+    assert service.get_active_task()["active_task"] is None
+
+
+def test_supervision_reports_untracked_work_and_active_task_coverage(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    tracked = repo / "tracked.txt"
+    tracked.write_text("v1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    service = DoneGateService(repo / ".donegate-mcp")
+    service.init_project("demo")
+
+    clean = service.get_supervision(repo_root=repo)
+    assert clean["supervision"]["status"] == "clean"
+    assert clean["supervision"]["changed_files"] == []
+
+    tracked.write_text("v2\n", encoding="utf-8")
+    needs_task = service.get_supervision(repo_root=repo)
+    assert needs_task["supervision"]["status"] == "needs_task"
+    assert needs_task["supervision"]["changed_files"] == ["tracked.txt"]
+
+    created = service.create_task("Gate task", "docs/spec.md")
+    task_id = created["task"]["task_id"]
+    service.activate_task(task_id)
+    covered = service.get_supervision(repo_root=repo)
+    assert covered["supervision"]["status"] == "tracked"
+    assert covered["supervision"]["active_task"]["task_id"] == task_id
 
 
 def test_service_gate_flow(tmp_path) -> None:

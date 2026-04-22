@@ -24,10 +24,16 @@ from donegate_mcp.models import (
 from donegate_mcp.domain.dashboard import build_dashboard
 from donegate_mcp.domain.lifecycle import apply_block, apply_doc_sync, apply_transition, apply_verification, compatibility_warning, normalize_task
 from donegate_mcp.storage.event_store import EventStore
-from donegate_mcp.storage.fs import append_jsonl, ensure_dir
+from donegate_mcp.storage.fs import append_jsonl, ensure_dir, make_executable, write_text
 from donegate_mcp.storage.project_store import ProjectStore
 from donegate_mcp.storage.state_store import StateStore
 from donegate_mcp.storage.task_store import TaskStore
+
+_MANAGED_HOOK_MARKER = "# Managed by DoneGate MCP"
+_BUNDLED_HOOKS = {
+    "pre-commit": "pre-commit.sh",
+    "pre-push": "pre-push.sh",
+}
 
 
 class DoneGateService:
@@ -40,6 +46,14 @@ class DoneGateService:
         self.states = StateStore(self.data_root)
         self.artifacts_dir = ensure_dir(self.data_root / "artifacts")
         self.deviations_path = self.data_root / DEVIATIONS_FILENAME
+
+    @staticmethod
+    def _bundled_hooks_dir() -> Path:
+        return Path(__file__).resolve().parents[3] / "scripts"
+
+    def _hook_payload(self, hook_name: str) -> str:
+        source = self._bundled_hooks_dir() / _BUNDLED_HOOKS[hook_name]
+        return f"{_MANAGED_HOOK_MARKER}\n{source.read_text(encoding='utf-8')}"
 
     def _require_project(self) -> ProjectState:
         if not self.projects.exists():
@@ -56,6 +70,46 @@ class DoneGateService:
             self.states.save_plan({"schema_version": SCHEMA_VERSION, "updated_at": utc_now(), "nodes": [], "specs": []})
         if not self.states.progress_exists():
             self.states.save_progress({"schema_version": SCHEMA_VERSION, "updated_at": utc_now(), "tasks": [], "summary": {}, "stale_tasks": []})
+        if not self.states.session_exists():
+            self.states.save_session({"schema_version": SCHEMA_VERSION, "updated_at": utc_now(), "active_task_id": None})
+        if not self.states.supervision_exists():
+            self.states.save_supervision({"schema_version": SCHEMA_VERSION, "updated_at": utc_now(), "repo_root": None, "status": "clean", "changed_files": [], "active_task_id": None})
+
+    def _session_payload(self) -> dict[str, Any]:
+        self._init_state_files()
+        return self.states.load_session()
+
+    def _current_active_task(self) -> Task | None:
+        session = self._session_payload()
+        task_id = session.get("active_task_id")
+        if not task_id:
+            return None
+        task = normalize_task(self.tasks.load(task_id))
+        self.tasks.save(task)
+        return task
+
+    @staticmethod
+    def _git_changed_files(repo_root: Path) -> list[str]:
+        completed = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise ValidationError(f"not a git repository: {repo_root}")
+        changed: list[str] = []
+        for raw_line in completed.stdout.splitlines():
+            line = raw_line.rstrip()
+            if not line:
+                continue
+            path = line[3:] if len(line) > 3 else ""
+            if " -> " in path:
+                path = path.split(" -> ", 1)[1]
+            if path == ".donegate-mcp" or path.startswith(".donegate-mcp/"):
+                continue
+            changed.append(path)
+        return sorted(changed)
 
     def _spec_snapshot(self, spec_ref: str) -> tuple[int | None, str | None]:
         path = Path(spec_ref)
@@ -143,6 +197,35 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "project": project.to_dict(), "data_root": str(self.data_root)}
 
+    def bootstrap_repository(self, project_name: str, repo_root: str | Path | None = None, default_branch: str | None = None) -> dict[str, Any]:
+        repo = Path(repo_root) if repo_root is not None else Path.cwd()
+        hooks_dir = ensure_dir(repo / ".git" / "hooks")
+        if not self.projects.exists():
+            self.init_project(project_name, default_branch=default_branch)
+        project = self._require_project()
+
+        installed: list[str] = []
+        skipped: list[str] = []
+        for hook_name in _BUNDLED_HOOKS:
+            destination = hooks_dir / hook_name
+            payload = self._hook_payload(hook_name)
+            if destination.exists():
+                current = destination.read_text(encoding="utf-8")
+                if not current.startswith(_MANAGED_HOOK_MARKER):
+                    skipped.append(hook_name)
+                    continue
+            write_text(destination, payload)
+            make_executable(destination)
+            installed.append(hook_name)
+
+        return {
+            "ok": True,
+            "project": project.to_dict(),
+            "data_root": str(self.data_root),
+            "repo_root": str(repo),
+            "hooks": {"installed": installed, "skipped": skipped},
+        }
+
     def create_task(self, title: str, spec_ref: str, summary: str = "", verification_mode: str = "manual", test_commands: list[str] | None = None, required_doc_refs: list[str] | None = None, required_artifacts: list[str] | None = None, plan_node_id: str | None = None) -> dict[str, Any]:
         project = self._require_project()
         project.task_counter += 1
@@ -155,6 +238,56 @@ class DoneGateService:
         self._emit(task_id, "task_created", task.to_dict())
         self._sync_state_files()
         return {"ok": True, "task": task.to_dict(), "events_written": 1, "errors": []}
+
+    def activate_task(self, task_id: str) -> dict[str, Any]:
+        self._require_project()
+        task = normalize_task(self.tasks.load(task_id))
+        self.tasks.save(task)
+        session = self._session_payload()
+        session["active_task_id"] = task.task_id
+        session["updated_at"] = utc_now()
+        self.states.save_session(session)
+        self._emit(task.task_id, "active_task_changed", {"active_task_id": task.task_id})
+        return {"ok": True, "active_task": task.to_dict(), "session": session, "errors": []}
+
+    def get_active_task(self) -> dict[str, Any]:
+        self._require_project()
+        session = self._session_payload()
+        task = self._current_active_task()
+        return {"ok": True, "active_task": task.to_dict() if task else None, "session": session, "errors": []}
+
+    def clear_active_task(self) -> dict[str, Any]:
+        self._require_project()
+        session = self._session_payload()
+        previous_task = self._current_active_task()
+        session["active_task_id"] = None
+        session["updated_at"] = utc_now()
+        self.states.save_session(session)
+        self._emit(previous_task.task_id if previous_task else "project", "active_task_cleared", {"previous_task_id": previous_task.task_id if previous_task else None})
+        return {"ok": True, "active_task": None, "session": session, "errors": []}
+
+    def get_supervision(self, repo_root: str | Path | None = None) -> dict[str, Any]:
+        self._require_project()
+        repo = Path(repo_root) if repo_root is not None else Path.cwd()
+        changed_files = self._git_changed_files(repo)
+        active_task = self._current_active_task()
+        if not changed_files:
+            status = "clean"
+        elif active_task is None:
+            status = "needs_task"
+        else:
+            status = "tracked"
+        payload = {
+            "schema_version": SCHEMA_VERSION,
+            "updated_at": utc_now(),
+            "repo_root": str(repo),
+            "status": status,
+            "changed_files": changed_files,
+            "active_task_id": active_task.task_id if active_task else None,
+            "active_task": active_task.to_dict() if active_task else None,
+        }
+        self.states.save_supervision(payload)
+        return {"ok": True, "supervision": payload, "errors": []}
 
     def list_tasks(self, status: str | None = None, limit: int | None = None) -> dict[str, Any]:
         self._require_project()

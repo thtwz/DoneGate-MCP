@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from donegate_mcp.cli.formatters import render
 from donegate_mcp.domain.services import DoneGateService
@@ -19,6 +20,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--data-root", default=None)
     parser.add_argument("--json", action="store_true", dest="as_json")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    bootstrap_p = sub.add_parser("bootstrap")
+    bootstrap_p.add_argument("--project-name", required=True)
+    bootstrap_p.add_argument("--repo-root", default=".")
+    bootstrap_p.add_argument("--default-branch")
+
+    supervision_p = sub.add_parser("supervision")
+    supervision_p.add_argument("--repo-root", default=".")
 
     init_p = sub.add_parser("init")
     init_p.add_argument("--project-name", required=True)
@@ -62,6 +71,12 @@ def build_parser() -> argparse.ArgumentParser:
     list_p = task_sub.add_parser("list")
     list_p.add_argument("--status")
     list_p.add_argument("--limit", type=int)
+
+    activate = task_sub.add_parser("activate")
+    activate.add_argument("task_id")
+
+    task_sub.add_parser("active")
+    task_sub.add_parser("clear-active")
 
     for name in ["start", "submit", "done"]:
         p = task_sub.add_parser(name)
@@ -110,9 +125,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    service = DoneGateService(data_root=args.data_root)
+    service = DoneGateService(data_root=_resolve_service_root(args))
     try:
-        if args.command == "init":
+        if args.command == "bootstrap":
+            payload = service.bootstrap_repository(args.project_name, repo_root=args.repo_root, default_branch=args.default_branch)
+        elif args.command == "supervision":
+            payload = service.get_supervision(repo_root=args.repo_root)
+        elif args.command == "init":
             payload = service.init_project(args.project_name, default_branch=args.default_branch)
         elif args.command == "dashboard":
             payload = service.dashboard(include_tasks=args.include_tasks, limit=args.limit)
@@ -141,12 +160,25 @@ def main(argv: list[str] | None = None) -> int:
         return 4
 
 
+def _resolve_service_root(args: argparse.Namespace) -> str | None:
+    if args.command != "bootstrap" or args.data_root is not None:
+        return args.data_root
+    repo_root = Path(args.repo_root).resolve()
+    return str(repo_root / ".donegate-mcp")
+
+
 def _run_task_command(service: DoneGateService, args: argparse.Namespace) -> dict:
     cmd = args.task_command
     if cmd == "create":
         return service.create_task(args.title, args.spec_ref, summary=args.summary, verification_mode=args.verification_mode, test_commands=args.test_commands, required_doc_refs=args.required_doc_refs, required_artifacts=args.required_artifacts, plan_node_id=args.plan_node_id)
     if cmd == "list":
         return service.list_tasks(status=args.status, limit=args.limit)
+    if cmd == "activate":
+        return service.activate_task(args.task_id)
+    if cmd == "active":
+        return service.get_active_task()
+    if cmd == "clear-active":
+        return service.clear_active_task()
     if cmd == "start":
         return service.transition_task(args.task_id, "in_progress")
     if cmd == "submit":

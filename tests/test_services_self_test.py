@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 from donegate_mcp.domain.services import DoneGateService
@@ -85,3 +87,38 @@ def test_deviation_recording(tmp_path) -> None:
     listed = service.list_deviations()["deviations"]
     assert listed[0]["task_id"] == task_id
     assert listed[0]["summary"] == "changed behavior"
+
+
+def test_pre_commit_hook_uses_active_task_when_task_id_missing(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    root = repo / ".donegate-mcp"
+    service = DoneGateService(root)
+    service.init_project("demo")
+    created = service.create_task(
+        "Gate task",
+        "docs/spec.md",
+        verification_mode="self-test",
+        test_commands=["python3 -c 'print(123)'"],
+    )
+    task_id = created["task"]["task_id"]
+    service.activate_task(task_id)
+
+    env = dict(os.environ)
+    env["DONEGATE_MCP_ROOT"] = str(root)
+    env["DONEGATE_MCP_WORKDIR"] = str(repo)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+    env.pop("TASK_ID", None)
+
+    hook = Path(__file__).resolve().parents[1] / "scripts" / "pre-commit.sh"
+    completed = subprocess.run(
+        [str(hook)],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+    assert '"verification_status": "passed"' in completed.stdout

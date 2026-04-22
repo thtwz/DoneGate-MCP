@@ -21,15 +21,28 @@ After installation, the primary CLI is:
 donegate-mcp --help
 ```
 
-## 2. Initialize state in a target project
+## 2. Bootstrap a target project
 
-From the target project root:
+From the target project root, prefer a single bootstrap command:
+
+```bash
+donegate-mcp bootstrap --project-name my-project --repo-root .
+```
+
+This will:
+- initialize `.donegate-mcp`
+- install managed `pre-commit` and `pre-push` hooks into `.git/hooks`
+- keep unknown existing hooks untouched and report them as skipped
+
+## 3. Manual initialization path
+
+If you want to initialize state without installing hooks, use:
 
 ```bash
 donegate-mcp --data-root .donegate-mcp init --project-name my-project
 ```
 
-## 3. Recommended hook wiring
+## 4. Recommended manual hook wiring
 
 ```bash
 cp /path/to/DoneGate-MCP/scripts/pre-commit.sh .git/hooks/pre-commit
@@ -45,11 +58,26 @@ export TASK_ID=TASK-0001
 export SPEC_REF=docs/spec.md
 ```
 
-## 4. MCP integration
+For local repository work, you can also set the repo-local active task instead of exporting `TASK_ID` every time:
+
+```bash
+donegate-mcp --data-root .donegate-mcp task activate TASK-0001
+donegate-mcp --data-root .donegate-mcp --json task active
+```
+
+The managed `pre-commit` and `pre-push` hooks will use the active task automatically when `TASK_ID` is absent.
+
+You can also ask DoneGate to inspect whether the repository currently has work that is not tied to an active task:
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
+```
+
+## 5. MCP integration
 
 Use `examples/hermes-mcp-config.yaml` as a starting point. In practice, prefer packaging DoneGate MCP into the Python environment that Hermes uses, then point `mcp_servers.donegate_mcp.command` to that interpreter.
 
-## 5. Codex plugin integration
+## 6. Codex plugin integration
 
 If you want to expose DoneGate MCP inside Codex as a local plugin, keep the plugin layer thin and point it at the same MCP entrypoint:
 
@@ -61,10 +89,10 @@ If you want to expose DoneGate MCP inside Codex as a local plugin, keep the plug
 
 This keeps Codex-specific wiring separate from the delivery-gate core. The plugin should act as a thin adapter over the existing DoneGate MCP server, not a second implementation of delivery rules.
 
-## 6. Operational note
+## 7. Operational note
 
 For local adoption, the CLI is the primary stable interface. The MCP adapter is there for agent orchestration, but hook and CI integration should call the CLI directly.
 
-## 7. Naming note
+## 8. Naming note
 
 The public project name is `DoneGate MCP`. The CLI and Python module path are `donegate-mcp` and `donegate_mcp`.

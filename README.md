@@ -75,6 +75,16 @@ pip install "mcp>=1.9.0"
 
 The CLI and Python module path are both named `donegate_mcp` / `donegate-mcp`.
 
+## Bootstrap a repository
+
+The preferred v0.2 setup path is a single bootstrap command from the target repository root:
+
+```bash
+donegate-mcp bootstrap --project-name my-project --repo-root .
+```
+
+This initializes `.donegate-mcp/` for the repository and installs managed `pre-commit` and `pre-push` hooks into `.git/hooks/`. If an existing hook is not already managed by DoneGate MCP, bootstrap leaves it in place and reports it as skipped instead of overwriting it.
+
 ## CLI quick start
 
 ```bash
@@ -131,6 +141,33 @@ TASK_ID=TASK-0001 DONEGATE_MCP_ROOT=.donegate-mcp DONEGATE_MCP_WORKDIR=$(pwd) sc
 TASK_ID=TASK-0001 DONEGATE_MCP_ROOT=.donegate-mcp DOC_REF=docs/plan.md scripts/post-doc-sync.sh synced
 SPEC_REF=docs/spec.md DONEGATE_MCP_ROOT=.donegate-mcp scripts/post-spec-change.sh "design changed"
 ```
+
+For new repositories, prefer `donegate-mcp bootstrap` before wiring any additional environment variables by hand.
+
+## Active task context
+
+v0.2 also introduces a small repo-local active task context:
+
+```bash
+donegate-mcp --data-root .donegate-mcp task activate TASK-0001
+donegate-mcp --data-root .donegate-mcp --json task active
+donegate-mcp --data-root .donegate-mcp task clear-active
+```
+
+The bundled `pre-commit` and `pre-push` hooks now fall back to this active task when `TASK_ID` is not explicitly set.
+
+## Supervision reporting
+
+To check whether the repository currently has work that is not tied to an active task:
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
+```
+
+The v0.2 supervision read model currently reports:
+- `clean` when the working tree has no relevant changes
+- `needs_task` when files changed but no active task is set
+- `tracked` when files changed and an active task is present
 
 ## State files
 

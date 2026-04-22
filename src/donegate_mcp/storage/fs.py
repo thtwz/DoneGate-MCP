@@ -44,3 +44,19 @@ def append_jsonl(path: Path, row: dict[str, Any]) -> None:
             handle.write("\n")
     except OSError as exc:
         raise StorageError(f"failed to append jsonl {path}: {exc}") from exc
+
+
+def write_text(path: Path, content: str) -> None:
+    ensure_dir(path.parent)
+    try:
+        path.write_text(content, encoding=DEFAULT_ENCODING)
+    except OSError as exc:
+        raise StorageError(f"failed to write text {path}: {exc}") from exc
+
+
+def make_executable(path: Path) -> None:
+    try:
+        mode = path.stat().st_mode
+        path.chmod(mode | 0o111)
+    except OSError as exc:
+        raise StorageError(f"failed to chmod executable {path}: {exc}") from exc

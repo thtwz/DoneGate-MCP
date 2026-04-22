@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "donegate-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "A delivery quality gate for AI-assisted software work with a hook-friendly CLI and optional MCP server"
 readme = "README.md"
 license = {file = "LICENSE"}
