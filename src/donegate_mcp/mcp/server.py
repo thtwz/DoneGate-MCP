@@ -25,7 +25,9 @@ class DoneGateMcpApp:
     def _build_server(self) -> Any:
         try:
             from mcp.server.fastmcp import FastMCP  # type: ignore
-            server: Any = FastMCP("donegate-mcp")
+            # Use an identifier-safe MCP server name so host tooling can derive
+            # stable namespaces without needing to sanitize hyphenated labels.
+            server: Any = FastMCP("donegate_mcp")
         except Exception:
             server = SimpleToolServer()
         self._register_tools(server)
