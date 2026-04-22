@@ -148,9 +148,21 @@ def require_transition(task: Task, target: TaskStatus) -> None:
 
 def apply_transition(task: Task, target: TaskStatus) -> Task:
     require_transition(task, target)
-    if task.status == target:
-        return normalize_task(task)
     timestamp = utc_now()
+    if task.status == target:
+        if target in {TaskStatus.IN_PROGRESS, TaskStatus.AWAITING_VERIFICATION, TaskStatus.VERIFIED, TaskStatus.DOCUMENTED, TaskStatus.DONE} and task.started_at is None:
+            task.started_at = timestamp
+        if target == TaskStatus.VERIFIED:
+            task.verified_at = task.verified_at or timestamp
+        if target == TaskStatus.DOCUMENTED:
+            task.verified_at = task.verified_at or timestamp
+            task.documented_at = task.documented_at or timestamp
+        if target == TaskStatus.DONE:
+            task.verified_at = task.verified_at or timestamp
+            task.documented_at = task.documented_at or timestamp
+            task.done_at = task.done_at or timestamp
+        task.updated_at = timestamp
+        return normalize_task(task)
     reopening_from_done = task.status == TaskStatus.DONE and target != TaskStatus.DONE
     if reopening_from_done:
         task.done_at = None
