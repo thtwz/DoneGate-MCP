@@ -1,8 +1,8 @@
-# donegate-mcp Lifecycle Derived-State Refactor Plan
+# DoneGate Lifecycle Derived-State Refactor Plan
 
 > **For Hermes:** Use subagent-driven-development to execute this plan task-by-task. Keep changes small and verify after each slice.
 
-**Goal:** Remove order-coupling and hand-driven lifecycle drift in donegate-mcp by making task lifecycle status a projection of domain facts instead of a fragile manually advanced sequence.
+**Goal:** Remove order-coupling and hand-driven lifecycle drift in DoneGate by making task lifecycle status a projection of domain facts instead of a fragile manually advanced sequence.
 
 **Architecture:** Keep the existing Task record and MCP/CLI APIs, but refactor lifecycle handling so `verification_status`, `doc_sync_status`, `blocked_reason`, `needs_revalidation`, and completion timestamps become the primary facts. Introduce a single lifecycle projection function that derives the effective workflow phase (`draft`, `ready`, `in_progress`, `awaiting_verification`, `documented`, `done`, `blocked`) from those facts, then shrink imperative transition rules to only the steps that represent user intent rather than internal progress bookkeeping.
 

@@ -1,11 +1,11 @@
-# DoneGate MCP startup guide
+# DoneGate startup guide
 
 For project background and the agent-oriented overview, start with [README.md](../README.md). If you prefer Chinese, use [README.zh-CN.md](../README.zh-CN.md).
 
 ## 1. Local development
 
 ```bash
-cd /path/to/DoneGate-MCP
+cd /path/to/DoneGate
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e .
@@ -52,15 +52,15 @@ donegate-mcp --data-root .donegate-mcp init --project-name my-project
 ## 4. Recommended manual hook wiring
 
 ```bash
-cp /path/to/DoneGate-MCP/scripts/pre-commit.sh .git/hooks/pre-commit
-cp /path/to/DoneGate-MCP/scripts/pre-push.sh .git/hooks/pre-push
+cp /path/to/DoneGate/scripts/pre-commit.sh .git/hooks/pre-commit
+cp /path/to/DoneGate/scripts/pre-push.sh .git/hooks/pre-push
 chmod +x .git/hooks/pre-commit .git/hooks/pre-push
 ```
 
 Then export variables in your shell or CI job:
 
 ```bash
-source /path/to/DoneGate-MCP/examples/donegate-mcp.env.example
+source /path/to/DoneGate/examples/donegate-mcp.env.example
 export TASK_ID=TASK-0001
 export SPEC_REF=docs/spec.md
 ```
@@ -154,12 +154,12 @@ MCP clients should use the matching tools: `task_review`, `review_list`, `review
 ### Hermes native MCP
 
 Use `examples/hermes-mcp-config.yaml` as a starting point.
-If Hermes runs DoneGate MCP from the delivery-mcp checkout, the typical setup is:
+If Hermes runs DoneGate from the delivery checkout, the typical setup is:
 
 ```yaml
 mcp_servers:
   donegate_mcp:
-    command: "/Users/mac/workspace/projects/delivery-mcp/.venv/bin/donegate-mcp-serve"
+    command: "/Users/mac/workspace/projects/DoneGate/.venv/bin/donegate-mcp-serve"
     args: []
     env:
       DONEGATE_MCP_DATA_ROOT: "/absolute/path/to/.donegate-mcp"
@@ -170,8 +170,8 @@ mcp_servers:
 After changing the code, update the environment Hermes uses by reinstalling the editable package in that venv:
 
 ```bash
-cd /Users/mac/workspace/projects/delivery-mcp
-/Users/mac/workspace/projects/delivery-mcp/.venv/bin/pip install -e '.[mcp,test]'
+cd /Users/mac/workspace/projects/DoneGate
+/Users/mac/workspace/projects/DoneGate/.venv/bin/pip install -e '.[mcp,test]'
 ```
 
 If you use Hermes skills, load the `donegate-mcp-governor` skill before governed work so the operator flow stays aligned with DoneGate facts instead of chat narration.
@@ -184,7 +184,7 @@ For Trae-style plugin configs, point the plugin at the same `donegate-mcp-serve`
 {
   "mcpServers": {
     "donegate_mcp": {
-      "command": "/Users/mac/workspace/projects/delivery-mcp/.venv/bin/donegate-mcp-serve",
+      "command": "/Users/mac/workspace/projects/DoneGate/.venv/bin/donegate-mcp-serve",
       "args": [],
       "env": {
         "DONEGATE_MCP_DATA_ROOT": "/absolute/path/to/.donegate-mcp"
@@ -196,19 +196,19 @@ For Trae-style plugin configs, point the plugin at the same `donegate-mcp-serve`
 
 ## 8. Codex plugin integration
 
-If you want to expose DoneGate MCP inside Codex as a local plugin, keep the plugin layer thin and point it at the same MCP entrypoint:
+If you want to expose DoneGate inside Codex as a local plugin, keep the plugin layer thin and point it at the same MCP entrypoint:
 
 - Register the plugin in `~/.agents/plugins/marketplace.json`
-- Put the plugin manifest at `~/plugins/donegate-mcp/.codex-plugin/plugin.json`
+- Put the plugin manifest at `~/plugins/donegate/.codex-plugin/plugin.json`
 - Set `mcpServers` in that manifest to a relative config path such as `./.mcp.json`
-- Put the actual MCP command in `~/plugins/donegate-mcp/.mcp.json`
+- Put the actual MCP command in `~/plugins/donegate/.mcp.json`
 - Point that command at the Python environment that has `donegate_mcp` and `mcp` installed
 
-This keeps Codex-specific wiring separate from the delivery-gate core. The plugin should act as a thin adapter over the existing DoneGate MCP server, not a second implementation of delivery rules.
+This keeps Codex-specific wiring separate from the delivery-gate core. The plugin should act as a thin adapter over DoneGate's MCP server, not a second implementation of delivery rules.
 
 If Codex runs DoneGate as a shared plugin, prefer launching Codex from a shell that already sourced `.donegate-mcp/env.sh` in the target repository. That file exports `DONEGATE_MCP_ROOT` and `DONEGATE_MCP_REPO_ROOT`, which allow the shared MCP process to default to the supervised repository instead of the plugin checkout.
 
-If the host process cannot inherit that environment, pass `repo_root` explicitly in DoneGate MCP tool calls.
+If the host process cannot inherit that environment, pass `repo_root` explicitly in DoneGate tool calls.
 
 ## 9. Operational note
 
@@ -216,4 +216,4 @@ For local adoption, the CLI is the primary stable interface. The MCP adapter is 
 
 ## 10. Naming note
 
-The public project name is `DoneGate MCP`. The CLI and Python module path are `donegate-mcp` and `donegate_mcp`.
+The public project name is `DoneGate`. The CLI and Python module path remain `donegate-mcp` and `donegate_mcp` for compatibility.

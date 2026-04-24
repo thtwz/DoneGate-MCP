@@ -1,8 +1,8 @@
-# Contributing to DoneGate MCP
+# Contributing to DoneGate
 
 Thanks for your interest in contributing.
 
-DoneGate MCP is intentionally small and opinionated. The best contributions make the delivery gate clearer, more reliable, and easier to adopt without turning the project into a full project-management platform.
+DoneGate is intentionally small and opinionated. The best contributions make the delivery gate clearer, more reliable, and easier to adopt without turning the project into a full project-management platform.
 
 ## Ways to contribute
 
@@ -17,7 +17,7 @@ DoneGate MCP is intentionally small and opinionated. The best contributions make
 
 Please align with the core product shape:
 
-- DoneGate MCP is a delivery quality gate, not a general PM system
+- DoneGate is a delivery quality gate, not a general PM system
 - The CLI is the primary stable interface
 - MCP support exists for orchestration, not as the only way to use the project
 - Local-first, file-backed state is a feature, not a temporary shortcut
@@ -28,7 +28,7 @@ If a change expands scope significantly, open an issue or start a discussion bef
 ## Development setup
 
 ```bash
-cd /path/to/DoneGate-MCP
+cd /path/to/DoneGate
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e .

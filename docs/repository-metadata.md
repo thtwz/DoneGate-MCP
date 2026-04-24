@@ -8,7 +8,7 @@ Use this file as the source of truth for the GitHub repository's short descripti
 
 ## Suggested social preview / short pitch
 
-`DoneGate MCP makes "done" mean verified by enforcing verification, doc sync, artifact checks, and revalidation after spec drift.`
+`DoneGate makes "done" mean verified by enforcing verification, doc sync, artifact checks, and revalidation after spec drift.`
 
 ## Suggested topics
 

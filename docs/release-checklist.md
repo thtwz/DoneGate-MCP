@@ -1,4 +1,4 @@
-# DoneGate MCP release checklist
+# DoneGate release checklist
 
 Use this checklist before tagging or publishing a release.
 
@@ -14,7 +14,7 @@ Use this checklist before tagging or publishing a release.
 
 - `pyproject.toml` version is correct
 - Package name and CLI entrypoints are correct
-- The public brand is consistently `DoneGate MCP`
+- The public brand is consistently `DoneGate`
 - Python module and CLI names are consistently `donegate_mcp` / `donegate-mcp`
 
 ## Quality gate behavior

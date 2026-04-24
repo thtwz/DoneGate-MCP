@@ -1,4 +1,4 @@
-# DoneGate MCP v0.4.0 Release Notes
+# DoneGate v0.4.0 Release Notes
 
 v0.4.0 adds an advisory review layer for AI-assisted delivery.
 

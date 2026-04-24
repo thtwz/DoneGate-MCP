@@ -1,12 +1,12 @@
-# DoneGate MCP
+# DoneGate
 
-[![Test](https://img.shields.io/github/actions/workflow/status/thtwz/DoneGate-MCP/test.yml?branch=main&label=test)](https://github.com/thtwz/DoneGate-MCP/actions/workflows/test.yml)
-[![License](https://img.shields.io/github/license/thtwz/DoneGate-MCP)](https://github.com/thtwz/DoneGate-MCP/blob/main/LICENSE)
-[![Package](https://img.shields.io/badge/package-not%20published-lightgrey)](https://github.com/thtwz/DoneGate-MCP/releases)
+[![Test](https://img.shields.io/github/actions/workflow/status/thtwz/DoneGate/test.yml?branch=main&label=test)](https://github.com/thtwz/DoneGate/actions/workflows/test.yml)
+[![License](https://img.shields.io/github/license/thtwz/DoneGate)](https://github.com/thtwz/DoneGate/blob/main/LICENSE)
+[![Package](https://img.shields.io/badge/package-not%20published-lightgrey)](https://github.com/thtwz/DoneGate/releases)
 
 [中文文档 / Chinese README](README.zh-CN.md)
 
-DoneGate MCP is a local-first delivery control layer for AI-assisted software work.
+DoneGate is a local-first delivery control layer for AI-assisted software work.
 
 It gives repositories a stricter definition of done:
 - a task is not done until verification passes
@@ -25,18 +25,18 @@ In practice, the same problems keep showing up:
 - a spec changes after work is marked complete and the repository has no reliable way to reopen that work
 - local hooks, CI checks, and agent tools each invent their own rule set
 
-DoneGate MCP exists to solve that gap with a lightweight, file-backed control plane that works in local repos first and can be called from CLI, git hooks, CI wrappers, Hermes MCP, or Codex plugin integrations.
+DoneGate exists to solve that gap with a lightweight, file-backed control plane that works in local repos first and can be called from CLI, git hooks, CI wrappers, Hermes MCP, or Codex plugin integrations.
 
 ## Goals
 
-DoneGate MCP is designed to:
+DoneGate is designed to:
 - make delivery state explicit instead of conversational
 - keep task lifecycle, verification, doc sync, and spec drift in one shared model
 - let agents use the same gate humans use
 - stay easy to install from a git checkout without requiring a hosted backend
 - support worktree-heavy, branch-heavy agent workflows
 
-DoneGate MCP is intentionally not trying to be:
+DoneGate is intentionally not trying to be:
 - a hosted project management system
 - a multi-user lock manager
 - a PR platform replacement
@@ -70,11 +70,11 @@ DoneGate MCP is intentionally not trying to be:
 
 ## Human Quick Start
 
-### 1. Install DoneGate MCP
+### 1. Install DoneGate
 
 ```bash
-git clone https://github.com/thtwz/DoneGate-MCP.git
-cd DoneGate-MCP
+git clone https://github.com/thtwz/DoneGate.git
+cd DoneGate
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e ".[mcp,test]"
@@ -185,8 +185,8 @@ MCP hosts get the same surface through `task_review`, `review_list`, `review_dis
 If you give an LLM only this repository URL, the intended zero-context bootstrap path is:
 
 ```bash
-git clone https://github.com/thtwz/DoneGate-MCP.git
-cd DoneGate-MCP
+git clone https://github.com/thtwz/DoneGate.git
+cd DoneGate
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e ".[mcp,test]"
@@ -219,9 +219,9 @@ From there, the model has enough information to use all major surfaces:
 
 ### LLM Operating Contract
 
-An LLM integrating DoneGate MCP should follow this sequence:
+An LLM integrating DoneGate should follow this sequence:
 
-1. Clone and install DoneGate MCP from this repository.
+1. Clone and install DoneGate from this repository.
 2. Run `donegate-mcp bootstrap --project-name ... --repo-root .` inside the target repository.
 3. Read `donegate-mcp --json onboarding --repo-root . --agent <codex|hermes>`.
 4. Ensure a branch-scoped active task exists before editing code.
@@ -264,7 +264,7 @@ The repository-local onboarding asset is the preferred source because it is gene
 
 ### Codex Plugin
 
-DoneGate MCP can also be exposed to Codex as a local plugin. The plugin layer should stay thin and point at the same MCP server, not reimplement delivery rules.
+DoneGate can also be exposed to Codex as a local plugin. The plugin layer should stay thin and point at the same MCP server, not reimplement delivery rules.
 
 When Codex launches DoneGate as a shared plugin, make sure the Codex process inherits the repo-local environment from `.donegate-mcp/env.sh`. That file exports `DONEGATE_MCP_ROOT` and `DONEGATE_MCP_REPO_ROOT`, which let shared MCP sessions target the supervised repository instead of the plugin installation checkout.
 
@@ -359,4 +359,4 @@ PYTHONPATH=src pytest -q
 
 ## License
 
-DoneGate MCP is licensed under [Apache-2.0](LICENSE).
+DoneGate is licensed under [Apache-2.0](LICENSE).

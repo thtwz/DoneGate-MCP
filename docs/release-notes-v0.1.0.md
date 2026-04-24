@@ -1,6 +1,6 @@
-# DoneGate MCP v0.1.0
+# DoneGate v0.1.0
 
-Initial public release of DoneGate MCP.
+Initial public release of DoneGate.
 
 ## Highlights
 
@@ -24,7 +24,7 @@ Initial public release of DoneGate MCP.
 
 ## Notes
 
-- Public brand: `DoneGate MCP`
+- Public brand: `DoneGate`
 - Python package name: `donegate-mcp`
 - Python module path: `donegate_mcp`
 

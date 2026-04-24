@@ -1,4 +1,4 @@
-# donegate-mcp v0.1 Architecture
+# DoneGate v0.1 Architecture
 
 ## 1. Design Goals
 - Keep v0.1 file-backed and deterministic.

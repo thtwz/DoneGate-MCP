@@ -1,4 +1,4 @@
-# DoneGate MCP end-to-end demo
+# DoneGate end-to-end demo
 
 This walkthrough shows the full spec-driven loop:
 - create task from spec
@@ -13,7 +13,7 @@ This walkthrough shows the full spec-driven loop:
 ## Setup
 
 ```bash
-cd /path/to/DoneGate-MCP
+cd /path/to/DoneGate
 mkdir -p /tmp/delivery-demo/docs /tmp/delivery-demo/reports
 printf 'version 1\n' >/tmp/delivery-demo/docs/spec.md
 printf 'plan\n' >/tmp/delivery-demo/docs/plan.md

@@ -2,8 +2,8 @@
 
 ## Brand
 
-Project name: `DoneGate MCP`
-Public-facing docs and code-facing package names should use `DoneGate MCP` / `donegate_mcp` consistently.
+Project name: `DoneGate`
+Public-facing docs should use `DoneGate`. Code-facing package names should keep `donegate_mcp` / `donegate-mcp` for compatibility.
 
 ## Core framing
 
@@ -23,7 +23,7 @@ This project is not a project manager, not a CI platform, and not a general work
 
 ## Acceptance lessons from real usage
 
-DoneGate MCP should explicitly encode the following reusable lessons about acceptance:
+DoneGate should explicitly encode the following reusable lessons about acceptance:
 
 1. **A single success signal is not acceptance evidence.**
    A UI message, a log line, a returned status, or any other one-layer success cue is not enough by itself; acceptance still has to verify that the underlying state change actually happened.
@@ -51,11 +51,11 @@ DoneGate MCP should explicitly encode the following reusable lessons about accep
 
 ## Positioning statement
 
-`DoneGate MCP prevents AI-assisted tasks from being marked done before verification passes, docs are synced, and changed specs are revalidated.`
+`DoneGate prevents AI-assisted tasks from being marked done before verification passes, docs are synced, and changed specs are revalidated.`
 
 ## Open-source pitch
 
-DoneGate MCP is for teams that already have code generation and automation, but do not yet have a trustworthy definition of done.
+DoneGate is for teams that already have code generation and automation, but do not yet have a trustworthy definition of done.
 
 ## Tagline options
 

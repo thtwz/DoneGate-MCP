@@ -18,3 +18,27 @@ def test_end_to_end_demo_documents_how_to_reject_one_layer_success_signals() -> 
     assert "one signal looks good" in content
     assert "task verify <task-id> --result failed" in content
     assert "deviation add <task-id>" in content
+
+
+def test_public_docs_use_donegate_as_project_name() -> None:
+    checked_paths = [
+        REPO_ROOT / "README.md",
+        REPO_ROOT / "README.zh-CN.md",
+        REPO_ROOT / "CONTRIBUTING.md",
+        REPO_ROOT / "docs",
+        REPO_ROOT / "examples",
+    ]
+    contents: list[tuple[Path, str]] = []
+    for path in checked_paths:
+        if path.is_dir():
+            contents.extend((file_path, file_path.read_text()) for file_path in path.rglob("*") if file_path.is_file())
+        else:
+            contents.append((path, path.read_text()))
+
+    offenders = [
+        str(path.relative_to(REPO_ROOT))
+        for path, content in contents
+        if "DoneGate MCP" in content or "DoneGate-MCP" in content
+    ]
+
+    assert offenders == []

@@ -1,4 +1,4 @@
-# donegate-mcp v0.1 Plan
+# DoneGate v0.1 Plan
 
 ## Goal
 Build a first working MCP server that manages a spec-driven delivery workflow for AI-assisted projects. The server should externalize project state, enforce simple delivery gates, and be easy to trigger from git hooks or CI.
