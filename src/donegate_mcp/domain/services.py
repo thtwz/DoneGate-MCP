@@ -4,10 +4,11 @@ import hashlib
 import json
 import subprocess
 import sys
+from functools import wraps
 from pathlib import PurePosixPath
 from pathlib import Path
 from uuid import uuid4
-from typing import Any
+from typing import Any, Callable, TypeVar, cast
 
 from donegate_mcp.config import DEVIATIONS_FILENAME, SCHEMA_VERSION, resolve_data_root
 from donegate_mcp.errors import ValidationError
@@ -29,22 +30,36 @@ from donegate_mcp.models import (
     TaskStatus,
     VerificationRecord,
     VerificationStatus,
+    WorkflowIntent,
     utc_now,
 )
 from donegate_mcp.domain.dashboard import build_dashboard
 from donegate_mcp.domain.lifecycle import apply_block, apply_doc_sync, apply_transition, apply_verification, compatibility_warning, normalize_task
+from donegate_mcp.domain.read_models import ReadModelProjector
 from donegate_mcp.storage.event_store import EventStore
 from donegate_mcp.storage.fs import append_jsonl, ensure_dir, make_executable, write_text
 from donegate_mcp.storage.project_store import ProjectStore
 from donegate_mcp.storage.review_store import ReviewFindingStore, ReviewRunStore
 from donegate_mcp.storage.state_store import StateStore
 from donegate_mcp.storage.task_store import TaskStore
+from donegate_mcp.storage.workspace_lock import WorkspaceWriteLock
 
 _MANAGED_HOOK_MARKER = "# Managed by DoneGate"
 _BUNDLED_HOOKS = {
     "pre-commit": "pre-commit.sh",
     "pre-push": "pre-push.sh",
 }
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def _with_write_lock(func: _F) -> _F:
+    @wraps(func)
+    def wrapped(self: "DoneGateService", *args: Any, **kwargs: Any) -> Any:
+        with self.write_lock:
+            return func(self, *args, **kwargs)
+
+    return cast(_F, wrapped)
 
 
 class DoneGateService:
@@ -59,6 +74,13 @@ class DoneGateService:
         self.states = StateStore(self.data_root)
         self.artifacts_dir = ensure_dir(self.data_root / "artifacts")
         self.deviations_path = self.data_root / DEVIATIONS_FILENAME
+        self.write_lock = WorkspaceWriteLock(self.data_root / "locks" / "write.lock")
+        self.read_models = ReadModelProjector(
+            self.states,
+            self.tasks,
+            lambda: self._require_project().project_name,
+            self._advisory_summary,
+        )
 
     @staticmethod
     def _bundled_hooks_dir() -> Path:
@@ -284,34 +306,36 @@ class DoneGateService:
         return payload
 
     def _normalize_checkpoint(self, checkpoint: str) -> ReviewCheckpoint:
-        try:
-            return ReviewCheckpoint(checkpoint)
-        except ValueError as exc:
-            raise ValidationError(f"unknown review checkpoint: {checkpoint}") from exc
+        return self._normalize_enum(ReviewCheckpoint, checkpoint, "review checkpoint")
 
     def _normalize_recommendation(self, recommendation: str) -> ReviewRecommendation:
-        try:
-            return ReviewRecommendation(recommendation)
-        except ValueError as exc:
-            raise ValidationError(f"unknown review recommendation: {recommendation}") from exc
+        return self._normalize_enum(ReviewRecommendation, recommendation, "review recommendation")
 
     def _normalize_review_run_status(self, status: str) -> ReviewRunStatus:
-        try:
-            return ReviewRunStatus(status)
-        except ValueError as exc:
-            raise ValidationError(f"unknown review status: {status}") from exc
+        return self._normalize_enum(ReviewRunStatus, status, "review status")
 
     def _normalize_finding_severity(self, severity: str) -> ReviewFindingSeverity:
-        try:
-            return ReviewFindingSeverity(severity)
-        except ValueError as exc:
-            raise ValidationError(f"unknown review finding severity: {severity}") from exc
+        return self._normalize_enum(ReviewFindingSeverity, severity, "review finding severity")
 
     def _normalize_finding_disposition(self, disposition: str) -> ReviewFindingDisposition:
+        return self._normalize_enum(ReviewFindingDisposition, disposition, "review finding disposition")
+
+    @staticmethod
+    def _normalize_enum(enum_type: Any, value: str, label: str) -> Any:
         try:
-            return ReviewFindingDisposition(disposition)
+            return enum_type(value)
         except ValueError as exc:
-            raise ValidationError(f"unknown review finding disposition: {disposition}") from exc
+            allowed = ", ".join(member.value for member in enum_type)
+            raise ValidationError(f"unknown {label}: {value}; expected one of: {allowed}") from exc
+
+    def _normalize_task_status(self, status: str) -> TaskStatus:
+        return self._normalize_enum(TaskStatus, status, "task status")
+
+    def _normalize_verification_status(self, result: str) -> VerificationStatus:
+        return self._normalize_enum(VerificationStatus, result, "verification result")
+
+    def _normalize_doc_sync_status(self, result: str) -> DocSyncStatus:
+        return self._normalize_enum(DocSyncStatus, result, "doc sync result")
 
     @staticmethod
     def _required_finding_field(finding_payload: dict[str, Any], field_name: str) -> str:
@@ -474,53 +498,7 @@ class DoneGateService:
         return normalized
 
     def _sync_state_files(self) -> None:
-        tasks = self._load_tasks(normalize=True, persist=True)
-        plan = self.states.load_plan() if self.states.plan_exists() else {"schema_version": SCHEMA_VERSION, "updated_at": utc_now(), "nodes": [], "specs": []}
-        nodes = []
-        spec_map: dict[str, dict[str, Any]] = {}
-        for task in tasks:
-            node_id = task.plan_node_id or task.task_id.lower()
-            nodes.append({
-                "node_id": node_id,
-                "task_id": task.task_id,
-                "title": task.title,
-                "spec_ref": task.spec_ref,
-                "status": task.status.value,
-                "verification_status": task.verification_status.value,
-                "doc_sync_status": task.doc_sync_status.value,
-                "needs_revalidation": task.needs_revalidation,
-                "stale_reason": task.stale_reason,
-            })
-            spec_map[task.spec_ref] = {"spec_ref": task.spec_ref, "spec_version": task.spec_version, "spec_hash": task.spec_hash}
-        plan["updated_at"] = utc_now()
-        plan["nodes"] = nodes
-        plan["specs"] = list(spec_map.values())
-        self.states.save_plan(plan)
-
-        advisory_summaries = {task.task_id: self._advisory_summary(task.task_id) for task in tasks}
-        summary = build_dashboard(self._require_project().project_name, tasks, advisory_summaries=advisory_summaries).to_dict()
-        stale_tasks = [
-            {"task_id": task.task_id, "title": task.title, "stale_reason": task.stale_reason, "spec_ref": task.spec_ref}
-            for task in tasks if task.needs_revalidation
-        ]
-        progress = {
-            "schema_version": SCHEMA_VERSION,
-            "updated_at": utc_now(),
-            "tasks": [
-                {
-                    "task_id": task.task_id,
-                    "title": task.title,
-                    "status": task.status.value,
-                    "plan_node_id": task.plan_node_id or task.task_id.lower(),
-                    "needs_revalidation": task.needs_revalidation,
-                    "advisory_summary": advisory_summaries.get(task.task_id),
-                }
-                for task in tasks
-            ],
-            "summary": summary,
-            "stale_tasks": stale_tasks,
-        }
-        self.states.save_progress(progress)
+        self.read_models.sync()
 
     def _mark_spec_drift(self, task: Task, reason: str) -> None:
         task.needs_revalidation = True
@@ -528,11 +506,12 @@ class DoneGateService:
         task.verification_status = VerificationStatus.UNKNOWN
         task.doc_sync_status = DocSyncStatus.OUTDATED if task.doc_sync_status == DocSyncStatus.SYNCED else task.doc_sync_status
         if task.status in {TaskStatus.VERIFIED, TaskStatus.DOCUMENTED, TaskStatus.DONE}:
-            task.status = TaskStatus.IN_PROGRESS
+            task.workflow_intent = WorkflowIntent.IN_PROGRESS
         task.done_at = None
         task.documented_at = None if task.doc_sync_status != DocSyncStatus.SYNCED else task.documented_at
         task.updated_at = utc_now()
 
+    @_with_write_lock
     def init_project(self, project_name: str, default_branch: str | None = None, repo_root: str | Path | None = None) -> dict[str, Any]:
         now = utc_now()
         resolved_repo = self._resolve_repo_root(repo_root, data_root=self.data_root)
@@ -542,6 +521,7 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "project": project.to_dict(), "data_root": str(self.data_root)}
 
+    @_with_write_lock
     def bootstrap_repository(self, project_name: str, repo_root: str | Path | None = None, default_branch: str | None = None) -> dict[str, Any]:
         repo = Path(repo_root) if repo_root is not None else Path.cwd()
         if not self.projects.exists():
@@ -579,6 +559,7 @@ class DoneGateService:
             },
         }
 
+    @_with_write_lock
     def get_onboarding(self, agent: str = "codex", repo_root: str | Path | None = None) -> dict[str, Any]:
         project = self._require_project()
         repo = self._resolve_repo_root(repo_root, project=project, data_root=self.data_root) or Path.cwd()
@@ -604,6 +585,7 @@ class DoneGateService:
             "errors": [],
         }
 
+    @_with_write_lock
     def create_task(
         self,
         title: str,
@@ -634,7 +616,6 @@ class DoneGateService:
             title=title,
             spec_ref=normalized_spec_ref or spec_ref,
             summary=summary,
-            status=TaskStatus.DRAFT,
             verification_mode=verification_mode,
             test_commands=list(test_commands or []),
             required_doc_refs=[path or "" for path in normalized_doc_refs],
@@ -653,6 +634,7 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": []}
 
+    @_with_write_lock
     def activate_task(self, task_id: str, repo_root: str | Path | None = None) -> dict[str, Any]:
         self._require_project()
         task = normalize_task(self.tasks.load(task_id))
@@ -677,6 +659,7 @@ class DoneGateService:
         task = self._current_active_task(repo_root=repo_root)
         return {"ok": True, "active_task": self._task_payload(task) if task else None, "session": session, "errors": []}
 
+    @_with_write_lock
     def clear_active_task(self, repo_root: str | Path | None = None) -> dict[str, Any]:
         project = self._require_project()
         session = self._session_payload()
@@ -696,6 +679,7 @@ class DoneGateService:
         self._emit(previous_task.task_id if previous_task else "project", "active_task_cleared", {"previous_task_id": previous_task.task_id if previous_task else None, "branch": branch})
         return {"ok": True, "active_task": None, "session": session, "errors": []}
 
+    @_with_write_lock
     def get_supervision(self, repo_root: str | Path | None = None) -> dict[str, Any]:
         project = self._require_project()
         repo = self._resolve_repo_root(repo_root, project=project, data_root=self.data_root) or Path.cwd()
@@ -748,20 +732,22 @@ class DoneGateService:
         self.states.save_supervision(payload)
         return {"ok": True, "supervision": payload, "errors": []}
 
+    @_with_write_lock
     def list_tasks(self, status: str | None = None, limit: int | None = None) -> dict[str, Any]:
         self._require_project()
         tasks = self._load_tasks(normalize=True, persist=True)
         if status:
-            expected = TaskStatus(status)
+            expected = self._normalize_task_status(status)
             tasks = [task for task in tasks if task.status == expected]
         if limit is not None:
             tasks = tasks[:limit]
         return {"ok": True, "tasks": [self._task_payload(task) for task in tasks], "errors": []}
 
+    @_with_write_lock
     def transition_task(self, task_id: str, target_status: str, reason: str | None = None, notes: str | None = None) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
-        target = TaskStatus(target_status)
+        target = self._normalize_task_status(target_status)
         warnings: list[str] = []
         warning = compatibility_warning(target)
         if warning:
@@ -781,10 +767,11 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": [], "warnings": warnings}
 
+    @_with_write_lock
     def record_verification(self, task_id: str, result: str, ref: str | None = None, notes: str | None = None) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
-        status = VerificationStatus(result)
+        status = self._normalize_verification_status(result)
         task = apply_verification(task, status, ref=ref)
         record = VerificationRecord(task_id=task_id, result=status, recorded_at=utc_now(), ref=ref, notes=notes)
         self.tasks.save(task)
@@ -792,10 +779,11 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "task": self._task_payload(task), "record": record.to_dict(), "events_written": 1, "errors": []}
 
+    @_with_write_lock
     def record_doc_sync(self, task_id: str, result: str, ref: str | None = None, notes: str | None = None) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
-        status = DocSyncStatus(result)
+        status = self._normalize_doc_sync_status(result)
         task = apply_doc_sync(task, status, ref=ref)
         record = DocSyncRecord(task_id=task_id, result=status, recorded_at=utc_now(), ref=ref, notes=notes)
         self.tasks.save(task)
@@ -803,6 +791,7 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "task": self._task_payload(task), "record": record.to_dict(), "events_written": 1, "errors": []}
 
+    @_with_write_lock
     def update_acceptance_protocol(self, task_id: str, verification_mode: str | None = None, test_commands: list[str] | None = None, required_doc_refs: list[str] | None = None, required_artifacts: list[str] | None = None, owned_paths: list[str] | None = None, plan_node_id: str | None = None) -> dict[str, Any]:
         project = self._require_project()
         task = self.tasks.load(task_id)
@@ -825,6 +814,7 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": []}
 
+    @_with_write_lock
     def record_task_review(
         self,
         task_id: str,
@@ -934,6 +924,7 @@ class DoneGateService:
             payload["findings"] = [self._finding_payload(finding) for finding in findings]
         return payload
 
+    @_with_write_lock
     def set_review_finding_disposition(
         self,
         finding_id: str,
@@ -961,6 +952,7 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "finding": self._finding_payload(finding), "errors": []}
 
+    @_with_write_lock
     def create_followup_task_from_finding(
         self,
         finding_id: str,
@@ -1000,6 +992,7 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "task": followup["task"], "finding": self._finding_payload(finding), "errors": []}
 
+    @_with_write_lock
     def run_self_test(self, task_id: str, workdir: str | None = None) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
@@ -1034,6 +1027,7 @@ class DoneGateService:
         verification["exit_code"] = exit_code
         return verification
 
+    @_with_write_lock
     def refresh_spec(self, spec_ref: str, reason: str | None = None) -> dict[str, Any]:
         project = self._require_project()
         repo_root = self._resolve_repo_root(None, project=project, data_root=self.data_root)
@@ -1055,6 +1049,7 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "spec_ref": normalized_spec_ref, "spec_version": spec_version, "spec_hash": spec_hash, "changed_tasks": changed, "errors": []}
 
+    @_with_write_lock
     def record_deviation(self, task_id: str, summary: str, details: str, spec_ref: str | None = None) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
@@ -1076,25 +1071,29 @@ class DoneGateService:
             rows = [json.loads(line) for line in self.deviations_path.read_text(encoding='utf-8').splitlines() if line.strip()]
         return {"ok": True, "deviations": rows, "errors": []}
 
+    @_with_write_lock
     def get_plan(self) -> dict[str, Any]:
         self._require_project()
         self._sync_state_files()
         return {"ok": True, "plan": self.states.load_plan(), "errors": []}
 
+    @_with_write_lock
     def get_progress(self) -> dict[str, Any]:
         self._require_project()
         self._sync_state_files()
         return {"ok": True, "progress": self.states.load_progress(), "errors": []}
 
+    @_with_write_lock
     def block_task(self, task_id: str, reason: str) -> dict[str, Any]:
         return self.transition_task(task_id, TaskStatus.BLOCKED.value, reason=reason)
 
+    @_with_write_lock
     def reopen_task(self, task_id: str, target_status: str = TaskStatus.IN_PROGRESS.value) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
         if task.status != TaskStatus.DONE:
             raise ValidationError(f"{task_id} is not done")
-        target = TaskStatus(target_status)
+        target = self._normalize_task_status(target_status)
         if target not in {TaskStatus.READY, TaskStatus.IN_PROGRESS, TaskStatus.AWAITING_VERIFICATION}:
             raise ValidationError("reopen target must be one of: ready, in_progress, awaiting_verification")
         task = apply_transition(task, target)
@@ -1103,6 +1102,7 @@ class DoneGateService:
         self._sync_state_files()
         return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": []}
 
+    @_with_write_lock
     def unblock_task(self, task_id: str, target_status: str) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
@@ -1110,12 +1110,13 @@ class DoneGateService:
             raise ValidationError(f"{task_id} is not blocked")
         task.blocked_reason = None
         task = normalize_task(task)
-        task = apply_transition(task, TaskStatus(target_status))
+        task = apply_transition(task, self._normalize_task_status(target_status))
         self.tasks.save(task)
         self._emit(task.task_id, "task_unblocked", {"target_status": task.status.value})
         self._sync_state_files()
         return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": []}
 
+    @_with_write_lock
     def dashboard(self, include_tasks: bool = False, limit: int = 10) -> dict[str, Any]:
         project = self._require_project()
         tasks = self._load_tasks(normalize=True, persist=True)

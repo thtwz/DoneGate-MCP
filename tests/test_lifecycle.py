@@ -4,11 +4,21 @@ import json
 
 from donegate_mcp.domain.lifecycle import apply_doc_sync, apply_transition, apply_verification, project_status
 from donegate_mcp.errors import TransitionError
-from donegate_mcp.models import DocSyncStatus, Task, TaskStatus, VerificationStatus
+from donegate_mcp.models import DocSyncStatus, Task, TaskStatus, VerificationStatus, WorkflowIntent
 
 
 def make_task(status: TaskStatus = TaskStatus.DRAFT) -> Task:
-    return Task(task_id="TASK-0001", title="demo", spec_ref="docs/spec.md", status=status)
+    intent = {
+        TaskStatus.DRAFT: WorkflowIntent.DRAFT,
+        TaskStatus.READY: WorkflowIntent.READY,
+        TaskStatus.IN_PROGRESS: WorkflowIntent.IN_PROGRESS,
+        TaskStatus.AWAITING_VERIFICATION: WorkflowIntent.AWAITING_VERIFICATION,
+        TaskStatus.VERIFIED: WorkflowIntent.AWAITING_VERIFICATION,
+        TaskStatus.DOCUMENTED: WorkflowIntent.AWAITING_VERIFICATION,
+        TaskStatus.DONE: WorkflowIntent.AWAITING_VERIFICATION,
+        TaskStatus.BLOCKED: WorkflowIntent.IN_PROGRESS,
+    }[status]
+    return Task(task_id="TASK-0001", title="demo", spec_ref="docs/spec.md", workflow_intent=intent)
 
 
 def test_done_requires_verification_and_docs() -> None:
@@ -67,7 +77,7 @@ def test_project_status_is_fact_derived() -> None:
     task = make_task(TaskStatus.IN_PROGRESS)
     task.started_at = "2026-01-01T00:00:00+00:00"
     assert project_status(task) == TaskStatus.IN_PROGRESS
-    task.status = TaskStatus.AWAITING_VERIFICATION
+    task.workflow_intent = WorkflowIntent.AWAITING_VERIFICATION
     assert project_status(task) == TaskStatus.AWAITING_VERIFICATION
     task.verification_status = VerificationStatus.PASSED
     assert project_status(task) == TaskStatus.VERIFIED

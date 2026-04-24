@@ -6,6 +6,14 @@ from donegate_mcp.mcp.server import DoneGateMcpApp, SimpleToolServer
 from donegate_mcp.mcp.tool_schemas import TOOLS
 
 
+def _tool(app: DoneGateMcpApp, name: str):
+    """Return a registered tool callable for either fallback or real FastMCP servers."""
+    server = app.server
+    if isinstance(server, SimpleToolServer):
+        return server.tools[name]
+    return server._tool_manager._tools[name].fn
+
+
 def test_mcp_app_prefers_donegate_env_repo_root_over_server_default_data_root(tmp_path, monkeypatch) -> None:
     server_home = tmp_path / "server-home"
     target_repo = tmp_path / "target-repo"
@@ -13,9 +21,7 @@ def test_mcp_app_prefers_donegate_env_repo_root_over_server_default_data_root(tm
     monkeypatch.setenv("DONEGATE_MCP_REPO_ROOT", str(target_repo))
 
     app = DoneGateMcpApp(data_root=str(server_home / ".donegate-mcp"))
-    assert isinstance(app.server, SimpleToolServer)
-
-    payload = app.server.tools["project_init"]("demo")
+    payload = _tool(app, "project_init")("demo")
 
     assert payload["ok"] is True
     assert (target_repo / ".donegate-mcp" / "project.json").exists()
@@ -28,10 +34,8 @@ def test_mcp_tools_accept_repo_root_override_for_target_repository(tmp_path) -> 
     target_repo.mkdir()
 
     app = DoneGateMcpApp(data_root=str(server_home / ".donegate-mcp"))
-    assert isinstance(app.server, SimpleToolServer)
-
-    init_payload = app.server.tools["project_init"]("demo", repo_root=str(target_repo))
-    create_payload = app.server.tools["task_create"](
+    init_payload = _tool(app, "project_init")("demo", repo_root=str(target_repo))
+    create_payload = _tool(app, "task_create")(
         "Gate task",
         "docs/spec.md",
         repo_root=str(target_repo),
@@ -50,13 +54,11 @@ def test_mcp_review_tools_record_findings_and_create_followup_tasks(tmp_path) ->
     target_repo.mkdir()
 
     app = DoneGateMcpApp(data_root=str(server_home / ".donegate-mcp"))
-    assert isinstance(app.server, SimpleToolServer)
-
-    app.server.tools["project_init"]("demo", repo_root=str(target_repo))
-    created = app.server.tools["task_create"]("Gate task", "docs/spec.md", repo_root=str(target_repo))
+    _tool(app, "project_init")("demo", repo_root=str(target_repo))
+    created = _tool(app, "task_create")("Gate task", "docs/spec.md", repo_root=str(target_repo))
     task_id = created["task"]["task_id"]
 
-    reviewed = app.server.tools["task_review"](
+    reviewed = _tool(app, "task_review")(
         task_id,
         checkpoint="manual",
         provider_id="manual",
@@ -77,8 +79,8 @@ def test_mcp_review_tools_record_findings_and_create_followup_tasks(tmp_path) ->
     )
     finding_id = reviewed["findings"][0]["finding_id"]
 
-    followup = app.server.tools["task_create_from_finding"](finding_id, repo_root=str(target_repo))
-    listed = app.server.tools["review_list"](task_id=task_id, include_findings=True, repo_root=str(target_repo))
+    followup = _tool(app, "task_create_from_finding")(finding_id, repo_root=str(target_repo))
+    listed = _tool(app, "review_list")(task_id=task_id, include_findings=True, repo_root=str(target_repo))
 
     assert reviewed["review"]["overall_recommendation"] == "proceed_with_followups"
     assert followup["task"]["source_finding_id"] == finding_id
@@ -91,18 +93,16 @@ def test_mcp_task_reopen_uses_resolved_call_context(tmp_path) -> None:
     target_repo.mkdir()
 
     app = DoneGateMcpApp(data_root=str(server_home / ".donegate-mcp"))
-    assert isinstance(app.server, SimpleToolServer)
-
-    app.server.tools["project_init"]("demo", repo_root=str(target_repo))
-    created = app.server.tools["task_create"]("Gate task", "docs/spec.md", repo_root=str(target_repo))
+    _tool(app, "project_init")("demo", repo_root=str(target_repo))
+    created = _tool(app, "task_create")("Gate task", "docs/spec.md", repo_root=str(target_repo))
     task_id = created["task"]["task_id"]
-    app.server.tools["task_transition"](task_id, "ready", repo_root=str(target_repo))
-    app.server.tools["task_transition"](task_id, "awaiting_verification", repo_root=str(target_repo))
-    app.server.tools["task_record_verification"](task_id, "passed", repo_root=str(target_repo))
-    app.server.tools["task_record_doc_sync"](task_id, "synced", repo_root=str(target_repo))
-    app.server.tools["task_transition"](task_id, "done", repo_root=str(target_repo))
+    _tool(app, "task_transition")(task_id, "ready", repo_root=str(target_repo))
+    _tool(app, "task_transition")(task_id, "awaiting_verification", repo_root=str(target_repo))
+    _tool(app, "task_record_verification")(task_id, "passed", repo_root=str(target_repo))
+    _tool(app, "task_record_doc_sync")(task_id, "synced", repo_root=str(target_repo))
+    _tool(app, "task_transition")(task_id, "done", repo_root=str(target_repo))
 
-    reopened = app.server.tools["task_reopen"](task_id, repo_root=str(target_repo))
+    reopened = _tool(app, "task_reopen")(task_id, repo_root=str(target_repo))
 
     assert reopened["ok"] is True
     assert reopened["task"]["status"] == "documented"

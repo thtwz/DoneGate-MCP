@@ -77,7 +77,7 @@ Fields:
 - `task_id`
 - `title`
 - `spec_ref` (path/URI to spec or ticket)
-- `status`
+- `workflow_intent` (`draft|ready|in_progress|awaiting_verification`)
 - `summary`
 - `blocked_reason` (nullable)
 - `created_at`
@@ -90,6 +90,8 @@ Fields:
 - `doc_sync_status` (`unknown|outdated|synced`)
 - `last_verification_ref` (nullable, e.g. test log path)
 - `last_doc_sync_ref` (nullable)
+
+`status` is not persisted in new task files. It is returned by CLI/MCP/read models as a compatibility alias for the projected lifecycle phase.
 
 ### `events/TASK-001.jsonl`
 One JSON object per line for auditability.
@@ -109,9 +111,11 @@ Defined in `src/donegate_mcp/models.py`.
 - `ProjectState`
   - project-level metadata and task counter.
 - `Task`
-  - current canonical state for one delivery item.
+  - canonical facts and workflow intent for one delivery item.
 - `TaskStatus` enum
-  - `draft`, `ready`, `in_progress`, `awaiting_verification`, `verified`, `documented`, `done`, `blocked`.
+  - projected phases: `draft`, `ready`, `in_progress`, `awaiting_verification`, `verified`, `documented`, `done`, `blocked`.
+- `WorkflowIntent` enum
+  - persisted operator intent: `draft`, `ready`, `in_progress`, `awaiting_verification`.
 - `VerificationRecord`
   - `task_id`, `result`, `recorded_at`, `ref`, `notes`.
 - `DocSyncRecord`

@@ -4,7 +4,7 @@
 
 **Goal:** Remove order-coupling and hand-driven lifecycle drift in DoneGate by making task lifecycle status a projection of domain facts instead of a fragile manually advanced sequence.
 
-**Architecture:** Keep the existing Task record and MCP/CLI APIs, but refactor lifecycle handling so `verification_status`, `doc_sync_status`, `blocked_reason`, `needs_revalidation`, and completion timestamps become the primary facts. Introduce a single lifecycle projection function that derives the effective workflow phase (`draft`, `ready`, `in_progress`, `awaiting_verification`, `documented`, `done`, `blocked`) from those facts, then shrink imperative transition rules to only the steps that represent user intent rather than internal progress bookkeeping.
+**Architecture:** Keep the existing MCP/CLI APIs, but refactor lifecycle handling so `workflow_intent`, `verification_status`, `doc_sync_status`, `blocked_reason`, `needs_revalidation`, and completion timestamps become the primary persisted data. Introduce a single lifecycle projection function that derives the effective workflow phase (`draft`, `ready`, `in_progress`, `awaiting_verification`, `documented`, `done`, `blocked`) from those facts, then shrink imperative transition rules to only the steps that represent user intent rather than internal progress bookkeeping.
 
 **Tech Stack:** Python, dataclasses, enum-based domain model, MCP tool server, CLI wrapper, pytest.
 
@@ -76,8 +76,9 @@ Do **not** break:
 - on-disk task JSON compatibility
 
 Instead:
-- keep `status` persisted for now
-- but normalize/recompute it whenever tasks are loaded/saved or domain actions occur
+- persist `workflow_intent` and facts in new task JSON
+- accept old task JSON that still has `status`
+- return `status` from CLI/MCP as a compatibility alias for `projected_status`
 
 ---
 
@@ -93,7 +94,6 @@ Instead:
 ### Out of scope
 - multi-user locking/concurrency
 - workflow customization per project
-- replacing status enum entirely in one pass
 - large storage format migration beyond additive/backward-compatible changes
 
 ---
@@ -133,7 +133,7 @@ pytest tests/test_lifecycle.py -q
 
 ### Task 2: Normalize task state after every domain mutation
 
-**Objective:** Ensure verification/doc sync/block/start/close actions all end by projecting status from facts.
+**Objective:** Ensure verification/doc sync/block/start/close actions all end by projecting status from facts and `workflow_intent`.
 
 **Files:**
 - Modify: `src/donegate_mcp/domain/lifecycle.py`
@@ -150,7 +150,7 @@ Cases:
 Pattern:
 - domain actions mutate facts/timestamps
 - call `project_status(...)`
-- write back `task.status`
+- return projected status at API/read-model boundaries without writing `status` back to task storage
 
 **Step 3: Verify**
 Run:

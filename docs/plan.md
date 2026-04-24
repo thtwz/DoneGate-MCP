@@ -48,6 +48,7 @@ Build a first working MCP server that manages a spec-driven delivery workflow fo
 - Closing a task after both conditions succeeds.
 - Dashboard shows counts and next actionable tasks.
 - Existing task JSON can be replayed and normalized from stale raw status values.
+- New task JSON persists `workflow_intent` and facts; `status` is projected at read/API boundaries.
 - Tests pass locally.
 - The documentation clearly states that acceptance evidence must come from real system facts, not assistant narration or UI-only cues.
 - The demo/docs show that acceptance for behavior-changing workflows should verify externally observable outcome + boundary result + persisted source-of-truth state + downstream derived state, not just a single success cue.

@@ -21,7 +21,7 @@ class TaskStore:
 
     def save(self, task: Task) -> Task:
         task = normalize_task(task)
-        atomic_write_json(self.path_for(task.task_id), task.to_dict())
+        atomic_write_json(self.path_for(task.task_id), task.to_storage_dict())
         return task
 
     def list(self) -> list[Task]:

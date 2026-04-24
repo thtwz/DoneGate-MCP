@@ -411,7 +411,7 @@ def test_verification_fact_marks_ready_task_as_started_and_promotes_status(tmp_p
     assert verified["task"]["status"] == "verified"
 
 
-def test_list_tasks_normalizes_stale_persisted_status(tmp_path) -> None:
+def test_list_tasks_projects_stale_legacy_status_without_repersisting_status(tmp_path) -> None:
     root = tmp_path / ".donegate-mcp"
     service = DoneGateService(root)
     service.init_project("demo")
@@ -420,6 +420,7 @@ def test_list_tasks_normalizes_stale_persisted_status(tmp_path) -> None:
 
     task_file = root / "tasks" / f"{task_id}.json"
     payload = json.loads(task_file.read_text(encoding="utf-8"))
+    payload.pop("workflow_intent", None)
     payload["status"] = "awaiting_verification"
     payload["verification_status"] = "passed"
     payload["doc_sync_status"] = "synced"
@@ -430,7 +431,8 @@ def test_list_tasks_normalizes_stale_persisted_status(tmp_path) -> None:
     assert listed["tasks"][0]["status"] == "documented"
 
     reloaded = json.loads(task_file.read_text(encoding="utf-8"))
-    assert reloaded["status"] == "documented"
+    assert "status" not in reloaded
+    assert reloaded["workflow_intent"] == "awaiting_verification"
 
 
 def test_dashboard_is_fact_driven_even_when_task_file_is_stale(tmp_path) -> None:
@@ -442,6 +444,7 @@ def test_dashboard_is_fact_driven_even_when_task_file_is_stale(tmp_path) -> None
 
     task_file = root / "tasks" / f"{task_id}.json"
     payload = json.loads(task_file.read_text(encoding="utf-8"))
+    payload.pop("workflow_intent", None)
     payload["status"] = "awaiting_verification"
     payload["verification_status"] = "passed"
     payload["started_at"] = payload["created_at"]

@@ -21,6 +21,13 @@ class TaskStatus(str, Enum):
     BLOCKED = "blocked"
 
 
+class WorkflowIntent(str, Enum):
+    DRAFT = "draft"
+    READY = "ready"
+    IN_PROGRESS = "in_progress"
+    AWAITING_VERIFICATION = "awaiting_verification"
+
+
 class VerificationStatus(str, Enum):
     UNKNOWN = "unknown"
     FAILED = "failed"
@@ -90,8 +97,8 @@ class Task:
     task_id: str
     title: str
     spec_ref: str
-    status: TaskStatus
     summary: str = ""
+    workflow_intent: WorkflowIntent = WorkflowIntent.DRAFT
     blocked_reason: str | None = None
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
@@ -120,19 +127,34 @@ class Task:
     source_task_id: str | None = None
     source_finding_id: str | None = None
 
+    @property
+    def status(self) -> TaskStatus:
+        from donegate_mcp.domain.lifecycle import project_status
+
+        return project_status(self)
+
     def to_dict(self) -> dict[str, Any]:
+        projected_status = self.status
         data = asdict(self)
-        data["status"] = self.status.value
+        data["workflow_intent"] = self.workflow_intent.value
         data["verification_status"] = self.verification_status.value
         data["doc_sync_status"] = self.doc_sync_status.value
-        data["projected_status"] = self.status.value
+        data["status"] = projected_status.value
+        data["projected_status"] = projected_status.value
         data["status_source"] = "projected"
+        return data
+
+    def to_storage_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["workflow_intent"] = self.workflow_intent.value
+        data["verification_status"] = self.verification_status.value
+        data["doc_sync_status"] = self.doc_sync_status.value
         return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Task":
         payload = dict(data)
-        payload["status"] = TaskStatus(payload["status"])
+        payload["workflow_intent"] = cls._workflow_intent_from_payload(payload)
         payload["verification_status"] = VerificationStatus(payload["verification_status"])
         payload["doc_sync_status"] = DocSyncStatus(payload["doc_sync_status"])
         payload.setdefault("verification_mode", "manual")
@@ -151,9 +173,29 @@ class Task:
         payload.setdefault("parent_task_id", None)
         payload.setdefault("source_task_id", None)
         payload.setdefault("source_finding_id", None)
+        payload.pop("status", None)
         payload.pop("projected_status", None)
         payload.pop("status_source", None)
         return cls(**payload)
+
+    @staticmethod
+    def _workflow_intent_from_payload(data: dict[str, Any]) -> WorkflowIntent:
+        if "workflow_intent" in data:
+            return WorkflowIntent(data["workflow_intent"])
+        old_status = TaskStatus(data.get("status", TaskStatus.DRAFT.value))
+        if old_status == TaskStatus.DRAFT:
+            return WorkflowIntent.DRAFT
+        if old_status == TaskStatus.READY:
+            return WorkflowIntent.READY
+        if old_status == TaskStatus.IN_PROGRESS:
+            return WorkflowIntent.IN_PROGRESS
+        if old_status == TaskStatus.AWAITING_VERIFICATION:
+            return WorkflowIntent.AWAITING_VERIFICATION
+        if old_status in {TaskStatus.VERIFIED, TaskStatus.DOCUMENTED, TaskStatus.DONE}:
+            return WorkflowIntent.AWAITING_VERIFICATION
+        if old_status == TaskStatus.BLOCKED:
+            return WorkflowIntent.IN_PROGRESS
+        return WorkflowIntent.DRAFT
 
 
 @dataclass(slots=True)

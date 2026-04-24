@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 from donegate_mcp.domain.dashboard import build_dashboard
-from donegate_mcp.models import Task, TaskStatus
+from donegate_mcp.models import Task, TaskStatus, VerificationStatus, WorkflowIntent
 
 
 def make_task(task_id: str, status: TaskStatus, title: str) -> Task:
-    task = Task(task_id=task_id, title=title, spec_ref="docs/spec.md", status=status)
+    intent = {
+        TaskStatus.READY: WorkflowIntent.READY,
+        TaskStatus.AWAITING_VERIFICATION: WorkflowIntent.AWAITING_VERIFICATION,
+        TaskStatus.VERIFIED: WorkflowIntent.AWAITING_VERIFICATION,
+        TaskStatus.BLOCKED: WorkflowIntent.IN_PROGRESS,
+    }.get(status, WorkflowIntent.DRAFT)
+    task = Task(task_id=task_id, title=title, spec_ref="docs/spec.md", workflow_intent=intent)
     if status == TaskStatus.BLOCKED:
         task.blocked_reason = "waiting"
+    if status == TaskStatus.VERIFIED:
+        task.verification_status = VerificationStatus.PASSED
     return task
 
 

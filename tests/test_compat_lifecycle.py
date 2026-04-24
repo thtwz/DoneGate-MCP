@@ -14,6 +14,7 @@ def test_old_task_json_awaiting_verification_with_all_gates_normalizes_to_docume
 
     task_file = root / "tasks" / f"{task_id}.json"
     payload = json.loads(task_file.read_text(encoding="utf-8"))
+    payload.pop("workflow_intent", None)
     payload["status"] = "awaiting_verification"
     payload["verification_status"] = "passed"
     payload["doc_sync_status"] = "synced"
@@ -33,6 +34,7 @@ def test_old_task_json_verified_with_synced_docs_normalizes_to_documented(tmp_pa
 
     task_file = root / "tasks" / f"{task_id}.json"
     payload = json.loads(task_file.read_text(encoding="utf-8"))
+    payload.pop("workflow_intent", None)
     payload["status"] = "verified"
     payload["verification_status"] = "passed"
     payload["doc_sync_status"] = "synced"
@@ -52,6 +54,7 @@ def test_old_task_json_documented_with_done_at_normalizes_to_done(tmp_path) -> N
 
     task_file = root / "tasks" / f"{task_id}.json"
     payload = json.loads(task_file.read_text(encoding="utf-8"))
+    payload.pop("workflow_intent", None)
     payload["status"] = "documented"
     payload["verification_status"] = "passed"
     payload["doc_sync_status"] = "synced"

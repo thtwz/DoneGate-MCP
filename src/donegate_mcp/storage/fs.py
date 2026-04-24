@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -21,7 +22,19 @@ def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
             json.dump(data, tmp, indent=2, sort_keys=True)
             tmp.write("\n")
             tmp.flush()
+            os.fsync(tmp.fileno())
             Path(tmp.name).replace(path)
+        try:
+            dir_fd = os.open(path.parent, os.O_RDONLY)
+        except OSError:
+            return
+        try:
+            try:
+                os.fsync(dir_fd)
+            except OSError:
+                pass
+        finally:
+            os.close(dir_fd)
     except OSError as exc:
         raise StorageError(f"failed to write json {path}: {exc}") from exc
 
